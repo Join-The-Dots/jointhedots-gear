@@ -1,0 +1,35 @@
+{
+   "name": "@jointhedots/gear",
+   "version": "1.0.0-build.0",
+   "type": "module",
+   "bin": {
+      "jointhedots-gear": "esm/cli.js"
+   },
+   "scripts": {
+      "prepare": "tsc",
+      "watch": "tsc -w"
+   },
+   "dependencies": {
+      "@aws-sdk/client-s3": "^3.675.0",
+      "@esbuild-plugins/node-modules-polyfill": "^0.2.2",
+      "dotenv": "^16.5.0",
+      "esbuild": "^0.25.9",
+      "esbuild-sass-plugin": "^3.3.1",
+      "express": "^4.19.2",
+      "glob": "^11.0.1",
+      "mime": "^4.0.4",
+      "node-watch": "0.5.9",
+      "postcss": "^8.5.3",
+      "sass": "~1.71.1",
+      "sharp": "^0.33.5",
+      "source-map-support": "^0.5.21",
+      "typescript": "~5.4.2",
+      "yargs": "^17.7.1"
+   },
+   "devDependencies": {
+      "@types/chrome": "^0.0.313",
+      "@types/node": "^22.7.4",
+      "@types/web-app-manifest": "^1.0.9",
+      "@types/yargs": "^17.0.33"
+   }
+}

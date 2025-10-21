@@ -1,0 +1,152 @@
+{
+  "$id": "https://example.com/app-descriptor.schema.json",
+  "title": "AppDescriptor",
+  "description": "Describes either a Chrome or Web application, including webviews, modules, and other metadata.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/chromeApp"
+    },
+    {
+      "$ref": "#/$defs/webApp"
+    }
+  ],
+  "discriminator": {
+    "propertyName": "type",
+    "mapping": {
+      "chrome": "#/$defs/chromeApp",
+      "web": "#/$defs/webApp"
+    }
+  },
+  "$defs": {
+    "baseAppDescriptor": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Internal name of the app."
+        },
+        "icon": {
+          "type": "string",
+          "description": "Optional icon path for the app."
+        },
+        "title": {
+          "type": "string",
+          "description": "Optional user-facing title of the app."
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional description of the app."
+        },
+        "webviews": {
+          "type": "object",
+          "description": "Optional map of webviews for the app.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "Optional title for the webview."
+              },
+              "entry": {
+                "type": "string",
+                "description": "The module ID (ESM file location) to load in the webview."
+              },
+              "favicon": {
+                "type": "string",
+                "description": "Optional path to favicon."
+              }
+            },
+            "required": [
+              "entry"
+            ]
+          }
+        },
+        "modules": {
+          "type": "object",
+          "description": "Optional map of module identifiers (ESM modules).",
+          "additionalProperties": {
+            "type": "string",
+            "description": "Module ID (path to ESM file)."
+          }
+        },
+        "assets": {
+          "type": "array",
+          "description": "Optional list of assets to be included with the app.",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "Simple string path to an asset."
+              },
+              {
+                "type": "object",
+                "description": "Mapped asset path with source and destination.",
+                "properties": {
+                  "from": {
+                    "type": "string",
+                    "description": "Source file path."
+                  },
+                  "to": {
+                    "type": "string",
+                    "description": "Destination file path."
+                  }
+                },
+                "required": [
+                  "from",
+                  "to"
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "chromeApp": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "chrome",
+          "description": "Type of the app, fixed as 'chrome' for Chrome extensions."
+        },
+        "manifest": {
+          "$ref": "./chrome-manifest.json",
+          "description": "Chrome extension manifest (v3)."
+        }
+      },
+      "required": [
+        "type",
+        "manifest"
+      ],
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseAppDescriptor"
+        }
+      ]
+    },
+    "webApp": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "web",
+          "description": "Type of the app, fixed as 'web' for web applications."
+        },
+        "manifest": {
+          "$ref": "./web-manifest.json",
+          "description": "Web application manifest."
+        }
+      },
+      "required": [
+        "type",
+        "manifest"
+      ],
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseAppDescriptor"
+        }
+      ]
+    }
+  }
+}

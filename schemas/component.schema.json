@@ -1,0 +1,172 @@
+{
+   "$schema": "https://json-schema.org/draft/2020-12/schema",
+   "$id": "https://example.com/component-manifest.schema.json",
+   "title": "Generic Component Manifest Schema",
+   "description": "A generic schema for component manifests, allowing custom and standard service/spec definitions.",
+   "type": "object",
+   "required": [
+      "$id",
+      "specs",
+      "services"
+   ],
+   "properties": {
+      "$id": {
+         "type": "string",
+         "description": "A unique identifier for the component."
+      },
+      "title": {
+         "type": "string",
+         "description": "Optional title of the component."
+      },
+      "description": {
+         "type": "string",
+         "description": "Optional description of the component."
+      },
+      "icon": {
+         "type": "string",
+         "description": "Optional icon reference."
+      },
+      "tags": {
+         "type": "array",
+         "description": "Optional list of tags (for fonctionnal matching).",
+         "items": {
+            "type": "string"
+         }
+      },
+      "keywords": {
+         "type": "array",
+         "description": "Optional list of keywords (for user search matching).",
+         "items": {
+            "type": "string"
+         }
+      },
+      "specs": {
+         "type": "object",
+         "description": "Component specifications for how services operate or integrate.",
+         "additionalProperties": {
+            "description": "Supports arbitrary structures for flexible specification design.",
+            "type": [
+               "object",
+               "string"
+            ]
+         },
+         "properties": {
+            "api": {
+               "type": "object",
+               "description": "External API reference spec.",
+               "properties": {
+                  "$ref": {
+                     "type": "string",
+                     "format": "uri"
+                  }
+               },
+               "required": [
+                  "$ref"
+               ]
+            },
+            "view": {
+               "type": "object",
+               "description": "Describes a visual or UI-related specification.",
+               "properties": {
+                  "requirements": {
+                     "type": "object",
+                     "properties": {
+                        "servicePoints": {
+                           "type": "object",
+                           "additionalProperties": {
+                              "type": "object",
+                              "properties": {
+                                 "service": {
+                                    "type": "string"
+                                 }
+                              },
+                              "required": [
+                                 "service"
+                              ]
+                           }
+                        }
+                     }
+                  }
+               },
+               "additionalProperties": true
+            },
+            "component": {
+               "type": "object",
+               "description": "Component configuration describing services and attributes.",
+               "properties": {
+                  "services": {
+                     "type": "array",
+                     "items": {
+                        "type": "string"
+                     }
+                  },
+                  "attributes": {
+                     "type": "object",
+                     "properties": {
+                        "entries": {
+                           "type": "object",
+                           "additionalProperties": {
+                              "anyOf": [
+                                 {
+                                    "type": "string"
+                                 },
+                                 {
+                                    "type": "object",
+                                    "properties": {
+                                       "name": {
+                                          "type": "string",
+                                          "description": "Name of the nested entry"
+                                       },
+                                       "icon": {
+                                          "type": "string"
+                                       },
+                                       "entries": {
+                                          "type": "object"
+                                       }
+                                    },
+                                    "required": [
+                                       "name",
+                                       "entries"
+                                    ]
+                                 }
+                              ]
+                           }
+                        }
+                     }
+                  }
+               },
+               "additionalProperties": true
+            }
+         }
+      },
+      "services": {
+         "type": "object",
+         "description": "Defines service entrypoints for implementation or execution.",
+         "additionalProperties": {
+            "type": [
+               "string",
+               "object"
+            ],
+            "description": "Can be a path, module reference, or full object configuration.",
+            "properties": {
+               "platform": {
+                  "type": "string",
+                  "description": "Execution platform such as 'worker'."
+               },
+               "module": {
+                  "type": "string",
+                  "description": "Module reference or path."
+               },
+               "allow_domains": {
+                  "type": "array",
+                  "items": {
+                     "type": "string"
+                  }
+               }
+            },
+            "additionalProperties": true
+         }
+      }
+   },
+   "additionalProperties": false
+}

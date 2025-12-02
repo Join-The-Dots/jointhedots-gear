@@ -1,6 +1,6 @@
 {
    "name": "@jointhedots/gear",
-   "version": "1.0.0-build.0",
+   "version": "1.0.16",
    "type": "module",
    "bin": {
       "jointhedots-gear": "esm/cli.js"

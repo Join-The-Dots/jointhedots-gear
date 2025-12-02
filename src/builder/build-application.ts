@@ -231,14 +231,15 @@ class PWAPackageTask extends BuildTask {
          "short_name": desc.name,
          "name": desc.title || desc.name,
          "icons": icons,
-         "id": "/show.html",
-         "start_url": "/show.html",
+         "id": "/index.html",
+         "start_url": "/index.html",
          "background_color": "#3367D6",
          "display": "standalone",
          "scope": "/",
          "theme_color": "#3367D6",
          "description": desc.description || "",
-         "shortcuts": []
+         "shortcuts": [],
+         ...desc.manifest,
       }, null, 2))
    }
    async createIcons(base: Sharp.Sharp): Promise<WebAppManifest["icons"]> {

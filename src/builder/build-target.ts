@@ -9,6 +9,7 @@ import { create_esbuild_context } from "../builder/esbuild-plugins.js"
 import { copyToStorageStream, StorageFiles } from "../model/storage.js"
 import DtsGenerator from "./emit-dts.js"
 import * as esbuild from 'esbuild'
+import { file } from "../utils/file.js"
 
 export class BuildFile {
    name: string
@@ -69,7 +70,9 @@ export class TypescriptDefinitionTask extends BuildTask {
       const lib = this.library
       const { storage } = this.target
       try {
-         const configText = Fs.readFileSync("./tsconfig.json").toString()
+         const configText =
+            file.read.text(Path.join(lib.path, "./tsconfig.json"))
+            || file.read.text("./tsconfig.json")
          await DtsGenerator({
             prefix: lib.name,
             baseDir: lib.path,
@@ -79,7 +82,8 @@ export class TypescriptDefinitionTask extends BuildTask {
             compilerOptions: configText,
          })
       }
-      finally {
+      catch (e) {
+         console.error("! no 'type.d.ts' will be generated for the package:", e.message)
       }
    }
 }

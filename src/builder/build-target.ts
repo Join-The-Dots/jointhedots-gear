@@ -4,12 +4,10 @@ import Path from "node:path"
 import MIME from 'mime'
 import { ComponentCatalogsDescriptor, ComponentID, ComponentManifest, ComponentPublication, makeComponentPublication, ResourceEntry } from "../model/component.js"
 import { compute_hashID, make_filename, make_relative_path, MapLike } from "../utils/helpers.js"
-import { AppEntry, AssetsEntry, Library, PackageDescriptor, WebviewEntry, Workspace } from "../model/workspace.js"
+import { AssetsEntry, Library, WebviewEntry, Workspace } from "../model/workspace.js"
 import { create_esbuild_context } from "../builder/esbuild-plugins.js"
 import { copyToStorageStream, StorageFiles } from "../model/storage.js"
-import DtsGenerator from "./emit-dts.js"
 import * as esbuild from 'esbuild'
-import { file } from "../utils/file.js"
 
 export class BuildFile {
    name: string
@@ -55,36 +53,6 @@ export class WebviewTask extends BuildTask {
              <body>
              </body>
          </html>`)
-   }
-}
-
-export class TypescriptDefinitionTask extends BuildTask {
-
-   constructor(
-      target: BuildTarget,
-      readonly library: Library,
-   ) {
-      super(target)
-   }
-   async execute() {
-      const lib = this.library
-      const { storage } = this.target
-      try {
-         const configText =
-            file.read.text(Path.join(lib.path, "./tsconfig.json"))
-            || file.read.text("./tsconfig.json")
-         await DtsGenerator({
-            prefix: lib.name,
-            baseDir: lib.path,
-            outDtsFile: storage.baseDir + "/types.d.ts",
-            outDir: storage.baseDir,
-            exclude: ["node_modules/**/*"],
-            compilerOptions: configText,
-         })
-      }
-      catch (e) {
-         console.error("! no 'type.d.ts' will be generated for the package:", e.message)
-      }
    }
 }
 
@@ -233,6 +201,7 @@ export class BuildTarget {
       readonly workspace: Workspace,
       readonly devmode: boolean,
       readonly watch: boolean,
+      readonly clean: boolean,
    ) {
    }
    add_component(descriptor: ComponentManifest, baseDir: string, library: Library) {
@@ -265,7 +234,7 @@ export class BuildTarget {
       this.components[id] = manifest
    }
    async build() {
-      this.storage.begin(!this.watch)
+      this.storage.begin(this.clean)
 
       // Make assets
       await this.assets.execute()

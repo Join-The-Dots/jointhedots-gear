@@ -12,6 +12,7 @@ export type BuildApplicationOptions = {
    version: string
    devmode?: boolean
    watch?: boolean
+   clean?: boolean
    port?: number
 }
 
@@ -22,11 +23,12 @@ export function create_application_target(opts: {
    devmode: boolean
    devserver?: string
    watch: boolean
+   clean: boolean
 }): BuildTarget {
    const { app, version } = opts
    const { type, name, webviews, modules, assets, components } = app.descriptor
    const ws = app.library.workspace
-   const target = new BuildTarget(name, opts.storage, ws, opts.devmode == true, opts.watch == true)
+   const target = new BuildTarget(name, opts.storage, ws, opts.devmode == true, opts.watch == true, opts.clean == true)
 
    // Generate hotreload assets
    const html_injects: string[] = []
@@ -126,6 +128,7 @@ export async function build_application(opts: BuildApplicationOptions): Promise<
       devmode: opts.devmode,
       devserver: opts.port && `http://localhost:${opts.port}`,
       watch: opts.port ? true : opts.watch,
+      clean: opts.clean,
    })
 
    console.log(`> Build app: ${target.name}`)

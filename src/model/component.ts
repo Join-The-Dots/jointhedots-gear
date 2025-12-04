@@ -86,5 +86,6 @@ export function makeComponentPublication(manif: ComponentManifest): ComponentPub
 const check_name_regex = /^(?![xX][mM][lL])[a-z](([.0-9_a-z\-]*-[.0-9_a-z\-]*)|([.0-9_a-z:]*:[.0-9_a-z:]*))$/
 
 export function isValidComponentName(name) {
-   return check_name_regex.test(name)
+   //return check_name_regex.test(name)
+   return true
 }

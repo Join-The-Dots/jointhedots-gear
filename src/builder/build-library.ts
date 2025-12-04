@@ -1,7 +1,8 @@
 import { Library, PackageDescriptor } from "../model/workspace.js"
 import { StorageFiles } from "../model/storage.js"
 import ChildProcess from "child_process"
-import { BuildTarget, ComponentCatalogsTask, resolve_entry_path, TypescriptDefinitionTask } from "./build-target.js"
+import { BuildTarget, ComponentCatalogsTask, resolve_entry_path } from "./build-target.js"
+import { TypescriptDefinitionTask } from "./emit-dts.js"
 import { compute_hashID, make_filename } from "../utils/helpers.js"
 import Path from "node:path"
 
@@ -11,6 +12,7 @@ export type BuildLibraryOptions = {
    version: string
    devmode: boolean
    watch: boolean
+   clean: boolean
 }
 
 export function create_library_target(opts: {
@@ -19,9 +21,10 @@ export function create_library_target(opts: {
    version: string
    devmode: boolean
    watch: boolean
+   clean: boolean
 }): BuildTarget {
    const lib = opts.library
-   const target = new BuildTarget(lib.name, opts.storage, lib.workspace, opts.devmode == true, opts.watch == true)
+   const target = new BuildTarget(lib.name, opts.storage, lib.workspace, opts.devmode == true, opts.watch == true, opts.clean == true)
    let exports: PackageDescriptor["exports"]
 
    // Prepare library package exports
@@ -95,6 +98,7 @@ export async function build_library(opts: BuildLibraryOptions, packageDir?: stri
       version: opts.version,
       devmode: opts.devmode,
       watch: opts.watch,
+      clean: opts.clean,
    })
 
    console.log(`> Build library: ${target.name}`)

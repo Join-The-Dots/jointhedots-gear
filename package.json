@@ -1,13 +1,13 @@
 {
    "name": "@jointhedots/gear",
-   "version": "1.0.16",
+   "version": "1.0.19",
    "type": "module",
    "bin": {
       "jointhedots-gear": "esm/cli.js"
    },
    "scripts": {
-      "prepare": "tsc",
-      "watch": "tsc -w"
+      "watch": "tsc -w",
+      "publish": "node build.mjs --publish"
    },
    "dependencies": {
       "@aws-sdk/client-s3": "^3.675.0",
@@ -27,6 +27,7 @@
       "yargs": "^17.7.1"
    },
    "devDependencies": {
+      "@polycuber/script.cli": "^1.0.5",
       "@types/chrome": "^0.0.313",
       "@types/node": "^22.7.4",
       "@types/web-app-manifest": "^1.0.9",

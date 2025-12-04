@@ -11,6 +11,7 @@ export function command_make(): CommandModule<any, {
    pack?: boolean
    versioned?: string
    devmode?: boolean
+   clean?: boolean
    apps?: string
    libs?: string
    dist?: string
@@ -35,6 +36,10 @@ export function command_make(): CommandModule<any, {
             default: false,
          })
          .option("devmode", {
+            type: "boolean",
+            default: false,
+         })
+         .option("clean", {
             type: "boolean",
             default: false,
          })
@@ -93,6 +98,7 @@ export function command_make(): CommandModule<any, {
                version: version,
                devmode: argv.devmode,
                watch: argv.watch,
+               clean: argv.clean || !argv.devmode,
             }))
          }
          for (const lib of libraries) {
@@ -104,6 +110,7 @@ export function command_make(): CommandModule<any, {
                version: version,
                devmode: argv.devmode,
                watch: argv.watch,
+               clean: argv.clean || !argv.devmode,
             }, argv.pack ? Path.resolve(argv.dist) : null))
          }
          await Promise.all(pendings)

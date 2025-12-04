@@ -310,9 +310,18 @@ export async function open_workspace(workspace_path: string, devmode: boolean): 
 
    let package_lock: any = null
    for (let path = Path.resolve(ws.path); ;) {
-      const search_path = path + "/node_modules"
-      if (Fs.existsSync(search_path) && Fs.existsSync(path + "/package.json")) {
-         ws.search_directories.push(search_path)
+      const package_json = await readJsonFile(path + "/package.json")
+      if (package_json) {
+         const search_path = path + "/node_modules"
+         if (Fs.existsSync(search_path)) {
+            ws.search_directories.push(search_path)
+         }
+         if (package_json.constants) {
+            ws.constants = {
+               ...package_json.constants,
+               ...ws.constants,
+            }
+         }
       }
       const package_lock_path = path + "/package-lock.json"
       if (!package_lock && Fs.existsSync(package_lock_path)) {

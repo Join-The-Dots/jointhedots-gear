@@ -9,7 +9,7 @@ script((argv) => {
 
    // Compile TypeScript
    print.info('Compiling TypeScript...')
-   const tscError = command.exec('npx tsc')
+   const tscError = command.exec('npm run build')
    if (tscError) {
       print.error('TypeScript compilation failed')
       command.exit(1)
@@ -17,20 +17,13 @@ script((argv) => {
    print.success('TypeScript compiled successfully')
 
    // Increase version
-   print.info('Increasing version...')
+   /*print.info('Increasing version...')
    const versionError = command.exec('npm version patch --no-git-tag-version')
    if (versionError) {
       print.error('Version bump failed')
       command.exit(1)
    }
-   print.success('Version increased successfully')
+   print.success('Version increased successfully')*/
 
    print.success('Build completed!')
-}, {
-   arguments: {
-      publish: {
-         type: 'boolean',
-         default: false
-      }
-   }
 })

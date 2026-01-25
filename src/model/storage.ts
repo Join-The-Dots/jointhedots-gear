@@ -4,7 +4,20 @@ import Fs from 'node:fs'
 import Crypto from 'node:crypto'
 import Path from 'node:path'
 import MIME from 'mime'
-import { IStorageStream } from './workspace'
+import { directory } from '../utils/file.ts'
+
+export interface IStorageTransaction {
+   commitContent(contentData: Uint8Array | string, contentType?: string): string
+   commitFile(key: string, contentData: Uint8Array | string, contentType?: string)
+   accept(): { added: string[], updated: string[], changed: boolean }
+}
+
+export interface IStorageZone {
+   clean()
+   edit(scratch?: boolean): IStorageTransaction // scratch: means that transaction will be considered as patch on a empty zone 
+   branch(path: string): IStorageZone
+   getBaseDirFS(): string
+}
 
 export class SourceEventEmitter {
    clients: any[] = []
@@ -34,18 +47,14 @@ export function createContentCID(data: Uint8Array | string): string {
 export function createContentKey(contentData: Uint8Array | string, contentType?: string): string {
    const hash = createContentCID(contentData)
    const ext = contentType ? "." + MIME.getExtension(contentType) : ""
-   return "CID." + hash + ext
+   return "cid." + hash + ext
 }
 
-export class StorageFiles implements IStorageStream {
-   files = new Map<string, esbuild.OutputFile>()
-   on_changes = new SourceEventEmitter()
-   baseDir: string = ""
-   constructor(public name: string, baseDir: string) {
-      this.baseDir = Path.resolve(baseDir)
-   }
-   begin(cleanup: boolean) {
-      if (cleanup) removeDirectory(this.baseDir)
+export type FileCache = Map<string, string> // path -> hash
+
+export class StorageTransaction implements IStorageTransaction {
+   private pending = new Map<string, { data: Uint8Array | string, hash: string }>()
+   constructor(private baseDir: string, private scratch: boolean, private root: StorageFiles) {
    }
    commitContent(contentData: Uint8Array | string, contentType?: string): string {
       const key = createContentKey(contentData, contentType)
@@ -53,28 +62,85 @@ export class StorageFiles implements IStorageStream {
       return key
    }
    commitFile(key: string, contentData: Uint8Array | string, contentType?: string) {
+      if (key.startsWith("C:")) {
+         console.log(key)
+      }
       const fpath = Path.join(this.baseDir, key)
-      Fs.mkdirSync(Path.dirname(fpath), { recursive: true })
-      Fs.writeFileSync(fpath, contentData)
+      const hash = createContentCID(contentData)
+      this.pending.set(fpath, { data: contentData, hash })
    }
-   end() {
+   accept(): { added: string[], updated: string[], changed: boolean } {
+      const { root, scratch, baseDir } = this
+      directory.make(baseDir)
+
+      const changes = { added: [] as string[], updated: [] as string[], changed: false }
+      for (const [fpath, { data, hash }] of this.pending) {
+         const prev = root.cache.get(fpath)
+         if (prev !== hash) {
+            ; (prev ? changes.updated : changes.added).push(Path.basename(fpath))
+            directory.make(Path.dirname(fpath))
+            Fs.writeFileSync(fpath, data)
+         }
+         root.cache.set(fpath, hash)
+      }
+      this.pending.clear()
+      /*
+            const removed = root.cache.size - newCache.size + changes.added.length
+            changes.changed = removed !== 0 || changes.added.length !== 0 || changes.updated.length !== 0*/
+      if (changes.updated.length > 0 || changes.added.length > 0) {
+         root.on_changes.sendEventsToAll("change", changes)
+      }
+      return changes
+   }
+}
+
+export class SubStorageFiles implements IStorageZone {
+   constructor(readonly root: StorageFiles, readonly baseDir: string) {
+      directory.make(baseDir)
+   }
+   getBaseDirFS() {
+      return this.baseDir
+   }
+   clean() {
+
+   }
+   edit(scratch?: boolean): IStorageTransaction {
+      return new StorageTransaction(this.baseDir, scratch, this.root)
+   }
+   branch(path: string): IStorageZone {
+      return new SubStorageFiles(this.root, Path.join(this.baseDir, path))
+   }
+}
+
+export class StorageFiles implements IStorageZone {
+   cache: FileCache = new Map()
+   on_changes = new SourceEventEmitter()
+   constructor(public name: string, readonly baseDir: string) {
+      directory.make(baseDir)
+   }
+   getBaseDirFS() {
+      return this.baseDir
+   }
+   clean() {
+      removeDirectory(this.baseDir)
+      directory.make(this.baseDir)
+   }
+   edit(scratch?: boolean): IStorageTransaction {
+      return new StorageTransaction(this.baseDir, scratch, this)
+   }
+   branch(path: string): IStorageZone {
+      return new SubStorageFiles(this, Path.resolve(this.baseDir, path))
    }
    route(): (req, res) => void {
       return (req, res) => {
          const fpath = Path.resolve(Path.join(this.baseDir, req.path))
-         const file = this.files.get(fpath)
          res.setHeader("Content-Type", MIME.getType(req.path))
-         if (file) {
-            res.send(Buffer.from(file.contents))
-         }
-         else {
-            res.sendFile(fpath, (err) => { if (err) res.status(404).send(err.message) })
-         }
+         res.sendFile(fpath, (err) => { if (err) res.status(404).send(err.message) })
       }
    }
 }
 
-export function copyToStorageStream(storage: IStorageStream, key: string, path: string, contentType?: string) {
+export function copyToStorageStream(storage: IStorageTransaction, key: string, path: string, contentType?: string) {
    const fstat = Fs.statSync(path)
    if (fstat.isFile()) {
       storage.commitFile(key, Fs.readFileSync(path), contentType || MIME.getType(path))

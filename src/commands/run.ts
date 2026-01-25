@@ -3,7 +3,7 @@ import Process from 'process'
 import Path from 'path'
 import ChildProcess from 'child_process'
 import { createRequire } from "module"
-import { CommandModule } from "yargs"
+import { type CommandModule } from "yargs"
 
 const restart_always_on_change = true
 

@@ -1,10 +1,10 @@
-import { Library, PackageDescriptor } from "../model/workspace.js"
-import { StorageFiles } from "../model/storage.js"
+import { Library, type PackageDescriptor } from "../model/workspace.ts"
+import { StorageFiles } from "../model/storage.ts"
 import ChildProcess from "child_process"
-import { BuildTarget, ComponentCatalogsTask, resolve_entry_path } from "./build-target.js"
-import { TypescriptDefinitionTask } from "./emit-dts.js"
-import { compute_hashID, make_filename } from "../utils/helpers.js"
+import { BuildTarget, ComponentCatalogsTask } from "./build-target.ts"
+import { TypescriptDefinitionTask } from "./emit-dts.ts"
 import Path from "node:path"
+import { create_manifests } from "../model/helpers/create-manifests.ts"
 
 export type BuildLibraryOptions = {
    library: Library
@@ -25,21 +25,13 @@ export function create_library_target(opts: {
 }): BuildTarget {
    const lib = opts.library
    const target = new BuildTarget(lib.name, opts.storage, lib.workspace, opts.devmode == true, opts.watch == true, opts.clean == true)
-   let exports: PackageDescriptor["exports"]
+   const manifs = create_manifests(lib, lib.bundle, opts.version)
 
-   // Prepare library package exports
-   for (const exp_id in lib.descriptor.exports) {
-      const exported = lib.descriptor.exports[exp_id]
-      const entry = resolve_entry_path(lib, typeof exported === "string" ? exported : exported?.import, lib.path)
-      const name = make_filename("export_" + compute_hashID(entry))
-      if (!exports) {
-         exports = {}
-      }
-      exports[exp_id] = {
-         import: `./${name}.js`,
-         types: "./types.d.ts",
-      }
-      target.esmodules.add_entry(name, entry)
+   // Add bundle exporteds
+   const { esmodules } = target
+   for (const exp_id in manifs.entries) {
+      const exp = manifs.entries[exp_id]
+      esmodules.add_entry(exp.basename, exp.source)
    }
 
    // Add library types.d.ts
@@ -49,13 +41,7 @@ export function create_library_target(opts: {
    target.tasks.push(new ComponentCatalogsTask(target))
 
    // Add library package.json
-   target.assets.add_static_json("package.json", {
-      ...lib.descriptor,
-      name: lib.name,
-      version: opts.version || lib.descriptor.version,
-      type: "module",
-      exports,
-   } as PackageDescriptor)
+   target.assets.add_static_json("package.json", manifs.package)
 
    // Add library components
    for (const [path, desc] of lib.components) {
@@ -77,12 +63,11 @@ export function create_library_target(opts: {
    target.esmodules.plugins.push({
       name: "externals",
       setup(build) {
+         const lib_prefix = lib.name + "/"
          build.onResolve({ filter: /.*/ }, ({ path }) => {
-            if (!path.startsWith(lib.name)) {
-               if (!path.startsWith(".") || path.startsWith("react")) {
-                  //console.log("> exclude:", path)
-                  return { external: true }
-               }
+            if (path !== lib.name && !path.startsWith(lib_prefix) && !path.startsWith(".")) {
+               //console.log("> exclude:", path)
+               return { external: true }
             }
          })
       }
@@ -105,11 +90,6 @@ export async function build_library(opts: BuildLibraryOptions, packageDir?: stri
    await target.build()
 
    if (!target.watch && packageDir) {
-      ChildProcess.execSync("npm pack --pack-destination " + packageDir, { cwd: target.storage.baseDir })
+      ChildProcess.execSync("npm pack --pack-destination " + packageDir, { cwd: target.storage.getBaseDirFS() })
    }
 }
-
-export function make_libname(pattern: string) {
-   return pattern.split(/[^a-zA-Z0-9]/).filter(x => x.length > 0).join("-")
-}
-

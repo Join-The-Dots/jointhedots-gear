@@ -1,36 +1,51 @@
 {
    "name": "@jointhedots/gear",
-   "version": "1.0.19",
+   "version": "1.0.21",
    "type": "module",
    "bin": {
       "jointhedots-gear": "esm/cli.js"
    },
+   "files": [
+      "esm",
+      "browser-modules",
+      "schemas"
+   ],
    "scripts": {
       "watch": "tsc -w",
-      "publish": "node build.mjs --publish"
+      "build": "tsc",
+      "dev:serve": "node --enable-source-maps --watch-path=esm esm/cli serve --app playground:agent --devmode --port 3001 --ws ../jointhedots-core/packages/jointhedots-agent",
+      "dev:build:core": "node --enable-source-maps --watch-path=esm esm/cli make --buns @jointhedots/core --devmode --ws ../jointhedots-core/packages/jointhedots-core",
+      "dev:build:cortex": "node --enable-source-maps --watch-path=esm esm/cli make --buns @jointhedots/cortex --devmode --ws ../jointhedots-core/packages/jointhedots-cortex",
+      "dev:build:lib": "node --enable-source-maps --watch-path=esm esm/cli make --libs @jointhedots/ui --devmode --ws ../jointhedots-core",
+      "dev:build:app": "node --enable-source-maps --watch-path=esm esm/cli make --apps playground:ui --ws ../jointhedots-core",
+      "serve:mono": "node --enable-source-maps --watch-path=esm esm/cli serve --app playground:ui --devmode --port 3002 --ws ../jointhedots-core",
+      "serve:host": "node --enable-source-maps --watch-path=esm esm/cli serve --app playground:ui:host  --port 3002 --ws ../jointhedots-core",
+      "prepublishOnly": "node prepublish.mjs"
    },
    "dependencies": {
-      "@aws-sdk/client-s3": "^3.675.0",
-      "@esbuild-plugins/node-modules-polyfill": "^0.2.2",
-      "dotenv": "^16.5.0",
-      "esbuild": "^0.25.9",
-      "esbuild-sass-plugin": "^3.3.1",
-      "express": "^4.19.2",
-      "glob": "^11.0.1",
-      "mime": "^4.0.4",
-      "node-watch": "0.5.9",
-      "postcss": "^8.5.3",
-      "sass": "~1.71.1",
-      "sharp": "^0.33.5",
-      "source-map-support": "^0.5.21",
-      "typescript": "~5.4.2",
-      "yargs": "^17.7.1"
+      "@aws-sdk/client-s3": "^3.968.0",
+      "@esbuild-plugins/node-modules-polyfill": "~0.2.2",
+      "@types/semver": "~7.7.1",
+      "dotenv": "~17.2.3",
+      "esbuild": "~0.27.2",
+      "esbuild-sass-plugin": "~3.6.0",
+      "express": "~5.2.1",
+      "glob": "~13.0.0",
+      "mime": "~4.1.0",
+      "node-watch": "~0.7.4",
+      "postcss": "~8.5.6",
+      "sass": "~1.97.2",
+      "semver": "~7.7.3",
+      "sharp": "~0.34.5",
+      "source-map-support": "~0.5.21",
+      "typescript": "~5.9.3",
+      "yargs": "~18.0.0"
    },
    "devDependencies": {
-      "@polycuber/script.cli": "^1.0.5",
-      "@types/chrome": "^0.0.313",
-      "@types/node": "^22.7.4",
-      "@types/web-app-manifest": "^1.0.9",
-      "@types/yargs": "^17.0.33"
+      "@polycuber/script.cli": "~1.0.5",
+      "@types/chrome": "~0.1.33",
+      "@types/node": "~22.7.4",
+      "@types/web-app-manifest": "~1.0.9",
+      "@types/yargs": "~17.0.35"
    }
 }

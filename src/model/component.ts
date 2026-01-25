@@ -1,4 +1,4 @@
-import { MapLike } from "../utils/helpers"
+import { isNormalizedName } from "../utils/normalized-name.ts"
 
 export type JSONSchema = any
 
@@ -12,14 +12,15 @@ export type ResourceFactory<ResourceInterface = any> = (data: any) => Promise<Re
 export type ResourceLink<ResourceInterface = any> = string
 
 export type ComponentID = string
+export type BundleID = ComponentID
 
 export type ComponentSpec = {
    "view"?: {
-      properties: MapLike<JSONSchema>
+      properties: Record<string, JSONSchema>
    }
    "component"?: {
       services: string[]
-      attributes: MapLike<JSONSchema>
+      attributes: Record<string, JSONSchema>
    }
    [customSpec: string]: any
 }
@@ -34,9 +35,20 @@ export type ComponentManifest = {
    keywords?: string[]
    description?: string
    selectors?: string[]
-   specs?: MapLike<ComponentSpec>
-   resources?: MapLike<ResourceEntry> // Resources catalog with undefined interface
-   services?: MapLike<ResourceEntry> // Resources providing specific services interfaces
+   specs?: Record<string, ComponentSpec>
+   data?: any // Reserved to component derived from a driver component
+   resources?: Record<string, ResourceEntry> // Resources catalog with undefined interface
+   services?: Record<string, ResourceEntry> // Resources providing specific services interfaces
+}
+
+export type BundleManifest = ComponentManifest & {
+   type: "bundle"
+   baseline: string
+   namespaces?: string[]
+   dependencies?: BundleID[]
+   exports: { [id: string]: string }
+   components: { [id: ComponentID]: ComponentPublication }
+   catalogs: { [id: ComponentCatalogID]: string }
 }
 
 export interface ComponentPublication {
@@ -63,7 +75,7 @@ export function checkComponentManifest(manif: ComponentManifest, path: string): 
    if (typeof manif.$id !== "string") {
       return new Error(`Component descriptor shall have '$id' at: ${path}`)
    }
-   if (!isValidComponentName(manif.$id)) {
+   if (!isNormalizedName(manif.$id)) { 
       return new Error(`Component descriptor have invalid '$id' -> '${manif.$id}' at: ${path}`)
    }
    return null
@@ -81,11 +93,4 @@ export function makeComponentPublication(manif: ComponentManifest): ComponentPub
       keywords: manif.keywords,
       tags: manif.tags,
    }
-}
-
-const check_name_regex = /^(?![xX][mM][lL])[a-z](([.0-9_a-z\-]*-[.0-9_a-z\-]*)|([.0-9_a-z:]*:[.0-9_a-z:]*))$/
-
-export function isValidComponentName(name) {
-   //return check_name_regex.test(name)
-   return true
 }

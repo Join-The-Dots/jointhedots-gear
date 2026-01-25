@@ -3,7 +3,7 @@ import Os from 'os'
 import Path from 'path'
 import Ts from 'typescript'
 import { BuildTarget, BuildTask } from './build-target.js'
-import { Library } from '../model/workspace.js'
+import { Library, type PackageExport } from '../model/workspace.js'
 import { file } from '../utils/file.js'
 
 const eol = Os.EOL
@@ -12,16 +12,6 @@ const DTSLEN = '.d.ts'.length
 
 function normalizeFileName(filename: string) {
    return filename.replaceAll(Path.sep, "/")
-}
-
-function normalizeImport(moduleId: string) {
-   if (moduleId === "index") {
-      return ""
-   }
-   if (moduleId.endsWith("/index")) {
-      moduleId = moduleId.slice(0, -6)
-   }
-   return `/${moduleId}`
 }
 
 function isDtsFilename(filename: string): boolean {
@@ -90,31 +80,18 @@ function processTree(sourceFile: Ts.SourceFile, replacer: (node: Ts.Node) => str
    return code
 }
 
-function getTSConfig(fileName: string, compilerOptions: Ts.CompilerOptions | string): [string[], Ts.CompilerOptions] {
-   let configObject: any
+function getTSConfig(baseDir: string, tsconfig: string): [string[], Ts.CompilerOptions] {
+   const { config, error } = Ts.parseConfigFileTextToJson("tsconfig.json", tsconfig)
+   if (error) throw getError([error])
 
-   if (typeof compilerOptions === 'string') {
-      const result = Ts.parseConfigFileTextToJson("tsconfig.json", compilerOptions)
-      if (result.error) {
-         throw getError([result.error])
-      }
-      configObject = result.config
-      configObject.include = undefined
-   } else {
-      configObject = {
-         compilerOptions: compilerOptions,
-         include: undefined
-      }
-   }
-
-   const configParseResult = Ts.parseJsonConfigFileContent(configObject, Ts.sys, fileName)
-   if (configParseResult.errors && configParseResult.errors.length) {
-      throw getError(configParseResult.errors)
+   const configParsed = Ts.parseJsonConfigFileContent(config, Ts.sys, baseDir)
+   if (configParsed.errors && configParsed.errors.length) {
+      throw getError(configParsed.errors)
    }
 
    return [
-      configParseResult.fileNames,
-      configParseResult.options
+      configParsed.fileNames,
+      configParsed.options
    ]
 }
 
@@ -146,21 +123,23 @@ class TypescriptProject {
    public readonly program: Ts.Program
    public readonly filenames: string[]
 
-   constructor(baseDir: string, compilerOptions: Ts.CompilerOptions | string, outDir?: string) {
+   constructor(baseDir: string, tsconfig: string, outDir?: string) {
       this.baseDir = Path.resolve(baseDir)
 
-      const [files, resolvedCompilerOptions] = getTSConfig(baseDir, compilerOptions)
+      const [files, compilerOptions] = getTSConfig(baseDir, tsconfig)
 
-      resolvedCompilerOptions.declaration = true
-      resolvedCompilerOptions.target = resolvedCompilerOptions.target || Ts.ScriptTarget.Latest
-      resolvedCompilerOptions.moduleResolution = resolvedCompilerOptions.moduleResolution || Ts.ModuleResolutionKind.Bundler
-      resolvedCompilerOptions.outDir = resolvedCompilerOptions.outDir || outDir
+      compilerOptions.declaration = true
+      compilerOptions.emitDeclarationOnly = true
+      compilerOptions.noEmit = false
+      compilerOptions.target = compilerOptions.target || Ts.ScriptTarget.Latest
+      compilerOptions.moduleResolution = compilerOptions.moduleResolution || Ts.ModuleResolutionKind.Bundler
+      compilerOptions.outDir = compilerOptions.outDir || outDir
 
       this.files = files
-      this.compilerOptions = resolvedCompilerOptions
+      this.compilerOptions = compilerOptions
       this.filenames = getFilenames(this.baseDir, files)
-      this.host = Ts.createCompilerHost(resolvedCompilerOptions)
-      this.program = Ts.createProgram(this.filenames, resolvedCompilerOptions, this.host)
+      this.host = Ts.createCompilerHost(compilerOptions)
+      this.program = Ts.createProgram(this.filenames, compilerOptions, this.host)
    }
 
    public getSourceFiles(): readonly Ts.SourceFile[] {
@@ -184,15 +163,16 @@ class TypescriptProject {
    }
 }
 
-export function createTypescriptProject(baseDir: string, compilerOptions: Ts.CompilerOptions | string, outDir?: string): TypescriptProject {
-   return new TypescriptProject(baseDir, compilerOptions, outDir)
+export function createTypescriptProject(baseDir: string, tsconfig: string, outDir?: string): TypescriptProject {
+   return new TypescriptProject(baseDir, tsconfig, outDir)
 }
 
 export function generateTypescriptDefinition(options: {
    project: TypescriptProject
-   exclude?: string[]
+   exclude: string[]
    externs?: string[]
    types?: string[]
+   exports: { [exportId: string]: PackageExport }
    includes?: string[]
    prefix?: string
 }): {
@@ -248,8 +228,7 @@ export function generateTypescriptDefinition(options: {
 
    // Filter source files
    const sourcesMap: { [shortname: string]: boolean } = {}
-   const internalsMap: { [shortname: string]: boolean } = {}
-   const internalsPrefixedMap: { [shortname: string]: boolean } = {}
+   const internalsMap: { [shortname: string]: string } = {}
    project.getSourceFiles().some(function (sourceFile) {
       if (sourceFile.fileName.indexOf(normalizedBaseDir) !== 0) return
       if (excludesMap[sourceFile.fileName]) return
@@ -258,16 +237,64 @@ export function generateTypescriptDefinition(options: {
       const shortNameNoExt = shortName.slice(0, -Path.extname(sourceFile.fileName).length)
       const strippedShortName = stripBaseUrlPrefix(shortName)
       const strippedShortNameNoExt = stripBaseUrlPrefix(shortNameNoExt)
-      internalsMap[shortName] = true
-      internalsMap[shortNameNoExt] = true
-      internalsMap[strippedShortName] = true
-      internalsMap[strippedShortNameNoExt] = true
-      internalsPrefixedMap[`${options.prefix}/${shortName}`] = true
-      internalsPrefixedMap[`${options.prefix}/${shortNameNoExt}`] = true
-      internalsPrefixedMap[`${options.prefix}/${strippedShortName}`] = true
-      internalsPrefixedMap[`${options.prefix}/${strippedShortNameNoExt}`] = true
+
+      let moduleId = `${options.prefix}/${strippedShortNameNoExt}`
+      internalsMap[shortName] = moduleId
+      internalsMap[shortNameNoExt] = moduleId
+      internalsMap[strippedShortName] = moduleId
+      internalsMap[strippedShortNameNoExt] = moduleId
       sourcesMap[sourceFile.fileName] = true
    })
+
+   // Build reverse map from internal paths to export names
+   // e.g., "src/Inputs" -> "./Inputs" means internal path "src/Inputs" exports as "prefix/Inputs"
+   // Store as [internalPrefix, exportName] pairs for prefix matching
+   if (options.exports) {
+      for (const [exportPath, value] of Object.entries(options.exports)) {
+         const exported = typeof value === 'string' ? value : (value.import || value.default || value.types || '')
+         if (!exported) continue
+
+         let exportId = exportPath.replace(/^\.\//, '').replace(/\/$/, '')
+         if (exportId === '.') exportId = options.prefix
+         else exportId = `${options.prefix}/${exportId}`
+
+         // Normalize internal path: remove leading ./, strip extensions
+         const internalPath = normalizeFileName(exported)
+         let shortNameNoExt = internalPath.replace(/^\.\//, '').replace(/\.(ts|tsx|js|jsx)$/, '')
+         if (shortNameNoExt.endsWith('/index')) shortNameNoExt = shortNameNoExt.slice(0, -6)
+         const strippedShortNameNoExt = stripBaseUrlPrefix(shortNameNoExt)
+
+         //console.log(shortNameNoExt, "->", exportId)
+         //console.log(strippedShortNameNoExt, "->", exportId)
+
+         internalsMap[shortNameNoExt] = exportId
+         internalsMap[strippedShortNameNoExt] = exportId
+      }
+   }
+
+
+   // Unified module ID normalization: strip extensions, baseUrl prefix, and remap to exports
+   function normalizeModuleId(moduleId: string): string {
+
+      // Strip .ts, .tsx, .js, .jsx, .d.ts extensions
+      moduleId = moduleId.replace(/\.(d\.ts|ts|tsx|js|jsx)$/, '')
+
+      // Strip baseUrl prefix
+      moduleId = stripBaseUrlPrefix(moduleId)
+
+      // Strip index suffix
+      if (moduleId === "index") {
+         return options.prefix
+      }
+      if (moduleId.endsWith("/index")) {
+         moduleId = moduleId.slice(0, -6)
+      }
+      // Apply resolved prefix
+      if (internalsMap[moduleId]) {
+         moduleId = internalsMap[moduleId]
+      }
+      return moduleId
+   }
 
    // Generate source files
    project.getSourceFiles().some(function (sourceFile) {
@@ -275,11 +302,11 @@ export function generateTypescriptDefinition(options: {
 
       // Source file is already a declaration file so should does not need to be pre-processed by the emitter
       if (isDtsFilename(sourceFile.fileName)) {
-         writeDeclaration(sourceFile, false)
+         writeDeclaration(sourceFile, sourceFile.fileName)
          return
       }
 
-      const emitOutput = project.emit(sourceFile, writeFile)
+      const emitOutput = project.emit(sourceFile, (filename, data) => writeFile(filename, data, sourceFile.fileName))
       if (emitOutput.emitSkipped || emitOutput.diagnostics.length > 0) {
          diagnostics.push(...emitOutput.diagnostics)
          diagnostics.push(...project.getSemanticDiagnostics(sourceFile))
@@ -295,25 +322,23 @@ export function generateTypescriptDefinition(options: {
       return false
    }
 
-   function writeFile(filename: string, data: string) {
+   function writeFile(filename: string, data: string, sourceFilePath: string) {
       if (isDtsFilename(filename)) {
          const declFile = Ts.createSourceFile(filename, data, project.compilerOptions.target, true)
-         writeDeclaration(declFile, true)
+         writeDeclaration(declFile, sourceFilePath)
       }
    }
 
-   function writeDeclaration(declarationFile: Ts.SourceFile, isOutput: boolean) {
+   function writeDeclaration(declarationFile: Ts.SourceFile, sourceFilePath: string) {
 
-      // resolving is important for dealting with relative outDirs
-      const filename = Path.resolve(declarationFile.fileName)
+      // Compute rawSourceModuleId based on the source file path that produced the declaration
+      const resolvedSourcePath = Path.resolve(sourceFilePath)
+      const sourceExt = Path.extname(resolvedSourcePath)
+      const rawSourceModuleId = normalizeFileName(resolvedSourcePath.slice(baseDir.length + 1, -sourceExt.length))
 
-      // use the outDir here, not the baseDir, because the declarationFiles are outputs of the build process
-      const outputDir = (isOutput && Boolean(outDir)) ? Path.resolve(outDir) : baseDir
-      const rawSourceModuleId = normalizeFileName(filename.slice(outputDir.length + 1, -DTSLEN))
-      const sourceModuleId = stripBaseUrlPrefix(rawSourceModuleId)
-
-      const moduleDeclId = normalizeImport(sourceModuleId)
-      outputContent += `declare module '${options.prefix}${moduleDeclId}' {${eol}${indent}`
+      // Normalize and remap the module ID
+      const moduleDeclId = normalizeModuleId(rawSourceModuleId)
+      outputContent += `declare module '${moduleDeclId}' {${eol}${indent}`
 
       function resolveModuleImport(moduleId: string): string {
 
@@ -321,7 +346,6 @@ export function generateTypescriptDefinition(options: {
          let resolved: string
          if (moduleId.charAt(0) === '.') {
             resolved = normalizeFileName(Path.join(Path.dirname(rawSourceModuleId), moduleId))
-            resolved = stripBaseUrlPrefix(resolved)
          } else {
             // Try to resolve using TypeScript's module resolution (handles tsconfig paths)
             const resolveResult = Ts.resolveModuleName(
@@ -333,14 +357,12 @@ export function generateTypescriptDefinition(options: {
 
             if (resolveResult.resolvedModule) {
                const resolvedFileName = normalizeFileName(resolveResult.resolvedModule.resolvedFileName)
+               if (excludesMap[resolvedFileName]) return moduleId
 
                // Check if resolved file is within our project (internal module)
                if (resolvedFileName.startsWith(normalizedBaseDir)) {
                   // Convert absolute path to relative module id
-                  const ext = Path.extname(resolvedFileName)
-                  resolved = resolvedFileName.slice(normalizedBaseDir.length, -ext.length)
-                  // Strip baseUrl prefix from the resolved path
-                  resolved = stripBaseUrlPrefix(resolved)
+                  resolved = resolvedFileName.slice(normalizedBaseDir.length)
                } else {
                   // External module - return as-is
                   return moduleId
@@ -351,11 +373,8 @@ export function generateTypescriptDefinition(options: {
             }
          }
 
-         // Apply resolved prefix
-         if (!internalsPrefixedMap[resolved]) {
-            resolved = `${options.prefix}${normalizeImport(resolved)}`
-         }
-         return resolved
+         // Normalize: strip extensions, baseUrl prefix, and remap to exports
+         return normalizeModuleId(resolved)
       }
 
       const content = processTree(declarationFile, function (node) {
@@ -424,14 +443,15 @@ export class TypescriptDefinitionTask extends BuildTask {
             file.read.text(Path.join(lib.path, "./tsconfig.json"))
             || file.read.text("./tsconfig.json")
 
-         const project = createTypescriptProject(lib.path, configText, storage.baseDir)
+         const project = createTypescriptProject(lib.path, configText, storage.getBaseDirFS())
 
-         const { dts, diagnostics } = await generateTypescriptDefinition({
+         const { dts, diagnostics } = generateTypescriptDefinition({
             project,
             prefix: lib.name,
             exclude: ["node_modules/**/*"],
+            exports: lib.descriptor.exports || {},
          })
-         file.write.text(storage.baseDir + "/types.d.ts", dts)
+         file.write.text(storage.getBaseDirFS() + "/types.d.ts", dts)
 
          printDiagnostics(diagnostics)
       }

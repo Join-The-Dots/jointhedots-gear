@@ -1,5 +1,8 @@
 import Path from "path"
 import fs from "fs"
+import { fileURLToPath } from "url"
+
+export const PackageRootDir = Path.resolve(fileURLToPath(import.meta.url), "../../..")
 
 export const file = {
   exists(path: string): boolean {
@@ -121,9 +124,8 @@ export const directory = {
   },
   make(path: string) {
     if (path && !fs.existsSync(path)) {
-      directory.make(Path.parse(path).dir)
-      fs.mkdirSync(path)
-    }
+      fs.mkdirSync(path, { recursive: true })
+    } 
   },
   remove(path: string) {
     if (fs.existsSync(path) && fs.lstatSync(path).isDirectory()) {
@@ -144,4 +146,10 @@ export const directory = {
     directory.remove(path)
     directory.make(path)
   },
+}
+
+export function make_relative_path(baseDir: string, ...path: string[]) {
+    const relpath = Path.relative(baseDir, Path.resolve(...path)).replace(/\\/g, "/")
+    if (relpath.startsWith(".")) return relpath
+    else return "./" + relpath
 }

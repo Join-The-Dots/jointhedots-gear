@@ -1,7 +1,7 @@
 import Path from 'node:path'
-import { CommandModule } from "yargs"
+import { type CommandModule } from "yargs"
 import { publish_aws_s3 } from '../publish/publish_aws_s3.js'
-import { open_workspace } from "../model/workspace.js"
+import { open_workspace } from "../model/workspace.ts"
 
 export function command_publish(): CommandModule<any, {
    app?: string

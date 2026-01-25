@@ -1,5 +1,5 @@
-import { CommandModule } from "yargs"
-import { file } from "../utils/file.js"
+import { type CommandModule } from "yargs"
+import { file } from "../utils/file.ts"
 
 export function command_init(): CommandModule<any, {
 }> {

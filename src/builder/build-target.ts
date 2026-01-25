@@ -2,64 +2,25 @@ import Fs from "node:fs"
 import Process from "node:process"
 import Path from "node:path"
 import MIME from 'mime'
-import { ComponentCatalogsDescriptor, ComponentID, ComponentManifest, ComponentPublication, makeComponentPublication, ResourceEntry } from "../model/component.js"
-import { compute_hashID, make_filename, make_relative_path, MapLike } from "../utils/helpers.js"
-import { AssetsEntry, Library, WebviewEntry, Workspace } from "../model/workspace.js"
-import { create_esbuild_context } from "../builder/esbuild-plugins.js"
-import { copyToStorageStream, StorageFiles } from "../model/storage.js"
+import { makeComponentPublication, type ComponentCatalogsDescriptor, type ComponentID, type ComponentManifest, type ComponentPublication, type ResourceEntry } from "../model/component.ts"
+import { type AssetsEntry, Library, Workspace } from "../model/workspace.ts"
+import type { Log } from "../model/helpers/logger.ts"
+import { create_esbuild_context } from "../builder/esbuild-plugins.ts"
+import { copyToStorageStream, type IStorageTransaction, type IStorageZone } from "../model/storage.ts"
 import * as esbuild from 'esbuild'
-
-export class BuildFile {
-   name: string
-   data?: string
-   emitter: BuildTask
-   read(to: BuildTask): string {
-      return this.data
-   }
-   write(data: string, from: BuildTask) {
-   }
-}
+import { computeNameHashID } from "../utils/normalized-name.ts"
 
 export abstract class BuildTask {
-   useds: BuildFile[] = []
    constructor(readonly target: BuildTarget) { }
+   get log() { return this.target.log }
    async init(): Promise<void> { }
    abstract execute(): Promise<void>
-}
-
-export class WebviewTask extends BuildTask {
-   constructor(
-      target: BuildTarget,
-      readonly name: string,
-      readonly title: string,
-      readonly desc: WebviewEntry,
-      readonly html_injects: string[],
-   ) {
-      super(target)
-   }
-   async execute() {
-      const { name, title, desc, html_injects, target } = this
-      const { storage } = target
-      storage.commitFile(name, `<!DOCTYPE html>
-         <html>
-             <head>
-                 <title>${title}</title>
-                 <meta charset="utf-8">
-                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                 ${desc.favicon ? `<link rel="icon" type="${MIME.getType(desc.favicon)}" href="${desc.favicon}">` : ""}
-                 <script defer type="module" src="./${name}.js"></script>
-                 ${html_injects.join('\n           ')}
-             </head>
-             <body>
-             </body>
-         </html>`)
-   }
 }
 
 export class ComponentCatalogsTask extends BuildTask {
    async execute() {
       const { target } = this
-      const { storage } = target
+      const tx = this.target.edit()
 
       // Emit static components manifest
       const manifest: ComponentCatalogsDescriptor = {
@@ -68,7 +29,7 @@ export class ComponentCatalogsTask extends BuildTask {
          components: {},
          catalogs: {},
       }
-      const catalogs: MapLike<ComponentPublication[]> = { "every": [] }
+      const catalogs: Record<string, ComponentPublication[]> = { "every": [] }
       for (const id in target.components) {
          const manif = target.components[id]
          const pub = makeComponentPublication(manif)
@@ -80,16 +41,16 @@ export class ComponentCatalogsTask extends BuildTask {
             }
          }
          catalogs.every.push(pub)
-         manifest.components[id] = await storage.commitContent(JSON.stringify(manif, null, 2), MIME.getType(".json"))
+         manifest.components[id] = await tx.commitContent(JSON.stringify(manif, null, 2), MIME.getType(".json"))
       }
 
       // Emit static components catalogs
       for (const name in catalogs) {
          const catalog = JSON.stringify(catalogs[name], null, 2)
-         manifest.catalogs[name] = await storage.commitContent(catalog, MIME.getType(".json"))
+         manifest.catalogs[name] = await tx.commitContent(catalog, MIME.getType(".json"))
       }
 
-      await storage.commitFile(`components.manifest.json`, JSON.stringify(manifest, null, 2))
+      await tx.commitFile(`components.manifest.json`, JSON.stringify(manifest, null, 2))
    }
 }
 
@@ -100,22 +61,22 @@ export type AssetMapping = {
 
 export class AssetsTask extends BuildTask {
    assets: AssetMapping[] = []
-   statics: MapLike<string> = {}
+   statics: Record<string, string> = {}
    add_entry(entry: AssetsEntry, baseDir: string, library: Library) {
       let asset: AssetMapping = null
 
       if (typeof entry === "string") {
-         const from = resolve_entry_path(library, entry, baseDir)
+         const from = library.resolve_entry_path(entry, baseDir)
          if (!from) throw new Error(`In '${baseDir}', cannot found asset from: '${entry}'`)
          asset = { from, to: Path.basename(entry) }
       }
       else {
-         const from = resolve_entry_path(library, entry.from, baseDir)
+         const from = library.resolve_entry_path(entry.from, baseDir)
          if (!from) throw new Error(`In '${baseDir}', cannot found asset from: '${entry.from}'`)
          asset = { from, to: entry.to }
       }
 
-      console.log(`+ assets '${library.name}': ${asset.from} -> ${asset.to}`)
+      this.log.info(`+ assets '${library.name}': ${asset.from} -> ${asset.to}`)
       this.assets.push(asset)
    }
    add_static_text(name: string, data: string) {
@@ -125,16 +86,16 @@ export class AssetsTask extends BuildTask {
       this.statics[name] = JSON.stringify(data, null, 2)
    }
    async execute(): Promise<any> {
-      const { storage } = this.target
+      const tx = this.target.edit()
       for (const key in this.statics) {
-         storage.commitFile(key, this.statics[key], MIME.getType(key))
+         tx.commitFile(key, this.statics[key], MIME.getType(key))
       }
       for (const asset of this.assets) {
          if (typeof asset === "string") {
-            copyToStorageStream(storage, asset, asset)
+            copyToStorageStream(tx, asset, asset)
          }
          else {
-            copyToStorageStream(storage, asset.to, asset.from)
+            copyToStorageStream(tx, asset.to, asset.from)
          }
       }
    }
@@ -143,20 +104,31 @@ export class AssetsTask extends BuildTask {
 export class ESModulesTask extends BuildTask {
    entries: { [url: string]: string } = {}
    imports: { [file: string]: string } = {}
+   internals = new Map<string, string>()
+
    plugins: esbuild.Plugin[] = []
    context: esbuild.BuildContext = null
+   transaction: IStorageTransaction = null
+
    add_entry(name: string, path: string) {
       this.entries[name] = path
       this.imports[path] = name
    }
+   add_entry_typescript(code: string, name?: string): string {
+      const id = computeNameHashID(code)
+      if (!name) name = id
+      this.internals.set(id, code)
+      this.add_entry(name, id)
+      return name
+   }
    add_resource_entry(resource: ResourceEntry, baseDir: string, library: Library): ResourceEntry {
       if (typeof resource === "string") {
          const parts = resource.split("#")
-         const file = resolve_entry_path(library, parts[0], baseDir)
+         const file = library.resolve_entry_path(parts[0], baseDir)
          if (file) {
             let named = this.imports[file]
             if (!named) {
-               named = make_filename("lambda_" + compute_hashID(file))
+               named = library.make_file_id("lambda", file)
                this.add_entry(named, file)
             }
             return `./${named}.js#${parts[1] || "default"}`
@@ -177,8 +149,7 @@ export class ESModulesTask extends BuildTask {
       }
 
       const { target } = this
-      const storage = this.target.storage
-      this.context = await create_esbuild_context(target, storage, storage.baseDir, target.devmode, this.plugins)
+      this.context = await create_esbuild_context(this, target.devmode)
 
       if (target.watch) {
          await this.context.watch()
@@ -195,14 +166,27 @@ export class BuildTarget {
    esmodules = new ESModulesTask(this)
    assets = new AssetsTask(this)
    tasks: BuildTask[] = []
+   transaction: IStorageTransaction = null
+   readonly log: Log
    constructor(
       readonly name: string,
-      readonly storage: StorageFiles,
+      readonly storage: IStorageZone,
       readonly workspace: Workspace,
       readonly devmode: boolean,
       readonly watch: boolean,
       readonly clean: boolean,
    ) {
+      this.log = workspace.logger.get(`build:${name}`)
+   }
+   edit(): IStorageTransaction {
+      if (!this.transaction) this.transaction = this.storage.edit()
+      return this.transaction
+   }
+   store() {
+      if (this.transaction) {
+         this.transaction.accept()
+         this.transaction = null
+      }
    }
    add_component(descriptor: ComponentManifest, baseDir: string, library: Library) {
       const id = descriptor.$id
@@ -234,7 +218,7 @@ export class BuildTarget {
       this.components[id] = manifest
    }
    async build() {
-      this.storage.begin(this.clean)
+      if (this.clean) this.storage.clean()
 
       // Make assets
       await this.assets.execute()
@@ -253,27 +237,9 @@ export class BuildTarget {
          })
       }
       else {
-         this.storage.end()
+         this.store()
       }
    }
-   error(err: string | Error) {
-      console.error(err)
-   }
-}
-
-export function resolve_entry_path(lib: Library, entryId: string, baseDir: string): string {
-   const fpath = make_relative_path(Process.cwd(), Path.resolve(baseDir, entryId))
-   if (entryId.startsWith(".")) return fpath
-
-   const parts = entryId.split("/")
-   for (const search_path of lib.search_directories) {
-      if (Fs.existsSync(search_path + "/" + parts[0])) {
-         return make_relative_path(Process.cwd(), search_path + "/" + entryId)
-      }
-   }
-
-   if (Fs.existsSync(fpath)) return fpath
-   return null
 }
 
 function createComponentDuplicateMessage(id: string, workspace: Workspace) {

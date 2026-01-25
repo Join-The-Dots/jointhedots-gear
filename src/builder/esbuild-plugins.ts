@@ -1,27 +1,25 @@
 import Fs from "node:fs"
 import Path from 'node:path'
 import Url from "node:url"
-import postcss from 'postcss'
-import { sassPlugin } from 'esbuild-sass-plugin'
-import { IStorageStream } from "../model/workspace.js"
-import { NodeModulesPolyfillPlugin } from "@esbuild-plugins/node-modules-polyfill"
-import { StorageFiles } from "../model/storage.js"
-import * as esbuild from 'esbuild'
 import MIME from 'mime'
-import { MapLike, PackageRootDir } from "../utils/helpers.js"
-import { BuildTarget } from "./build-target.js"
+import postcss from 'postcss'
+import * as esbuild from 'esbuild'
+import { sassPlugin } from 'esbuild-sass-plugin'
+import { NodeModulesPolyfillPlugin } from "@esbuild-plugins/node-modules-polyfill"
+import { ESModulesTask } from "./build-target.ts"
+import { PackageRootDir } from "../utils/file.ts"
+
+const VirtualOutDir = Path.normalize('X:/output/')
 
 export async function create_esbuild_context(
-   target: BuildTarget,
-   storage: StorageFiles,
-   outdir: string,
+   task: ESModulesTask,
    devmode: boolean,
-   plugins: esbuild.Plugin[] = [],
 ): Promise<esbuild.BuildContext> {
-   const ws = target.workspace
+   const ws = task.target.workspace
 
    // Define modules mapping
-   const modules_mapping = {
+   const modules_mapping: ESModuleResolverOptions = {
+      task,
       routeds: {
          "@mui/icons-material/": "@mui/icons-material/esm/"
       },
@@ -35,13 +33,13 @@ export async function create_esbuild_context(
    const workspace_constants = Object.keys(ws.constants).reduce((prev, key) => {
       const name = `constants.${key}`
       prev[name] = JSON.stringify(ws.constants[key])
-      console.log(`+ ${name} = ${prev[name]}`)
+      task.log.info(`+ ${name} = ${prev[name]}`)
       return prev
    }, {})
 
    const options: esbuild.BuildOptions = {
-      entryPoints: target.esmodules.entries,
-      outdir,
+      entryPoints: task.entries,
+      outdir: VirtualOutDir,
       format: 'esm',
       target: 'es2022',
       platform: "browser",
@@ -51,6 +49,7 @@ export async function create_esbuild_context(
       splitting: true,
       treeShaking: true,
       write: false,
+      logLevel: 'silent',
       chunkNames: "chunk.[hash]",
       jsx: "automatic",
       jsxImportSource: "react",
@@ -62,11 +61,11 @@ export async function create_esbuild_context(
          ...workspace_constants,
       },
       plugins: [
-         ...plugins,
-         ESModuleResolverPlugin(modules_mapping),
+         ...task.plugins,
+         ESModuleResolverPlugin2(modules_mapping),
          NodeModulesPolyfillPlugin(),
-         StyleSheetPlugin(storage),
-         StoragePlugin(storage),
+         StyleSheetPlugin(task),
+         StoragePlugin(task),
       ],
       loader: {
          '.jpg': 'file',
@@ -84,7 +83,8 @@ export async function create_esbuild_context(
    return esbuild.context(options)
 }
 
-function copyAssets(storage: IStorageStream) {
+function copyAssets(task: ESModulesTask) {
+   const tx = task.target.edit()
 
    function trimUrlValue(value) {
       var beginSlice, endSlice
@@ -102,7 +102,7 @@ function copyAssets(storage: IStorageStream) {
       b = b.split(Path.sep)
       for (var i = 0; i < a.length; i++) {
          if (b[i] === undefined || b[i] !== a[i]) {
-            break;
+            break
          }
          common.push(a[i])
       }
@@ -144,7 +144,7 @@ function copyAssets(storage: IStorageStream) {
             // Write new asset file into base dir
             let newFilename: string
             if (contents !== null) {
-               newFilename = storage.commitContent(contents, MIME.getType(newAssetFile))
+               newFilename = tx.commitContent(contents, MIME.getType(newAssetFile))
             }
             else {
                const urlBasename = assetBasename +
@@ -172,12 +172,12 @@ function copyAssets(storage: IStorageStream) {
    }
 }
 
-export function StyleSheetPlugin(storage: IStorageStream) {
+export function StyleSheetPlugin(task: ESModulesTask) {
    return sassPlugin({
       type: 'style',
       async transform(source: string, _resolveDir: string, filePath: string) {
          const { css } = await postcss()
-            .use(copyAssets(storage))
+            .use(copyAssets(task))
             .process(source, {
                from: filePath,
                to: `index.css`
@@ -187,34 +187,40 @@ export function StyleSheetPlugin(storage: IStorageStream) {
    })
 }
 
-export function StoragePlugin(storage: StorageFiles): esbuild.Plugin {
+export function StoragePlugin(task: ESModulesTask): esbuild.Plugin {
    return {
       name: "dipatch-files",
       setup: (build) => {
-         build.onEnd((result) => {
-            const { outputFiles } = result
-            if (outputFiles) {
-               const files = new Map<string, esbuild.OutputFile>()
-               const changes = { added: [] as string[], updated: [] as string[], }
-               for (const file of outputFiles) {
-                  const prev = storage.files.get(file.path)
-                  let changed = prev ? prev.hash !== file.hash : true
-                  if (changed) {
-                     if (!prev) changes.added.push(Path.basename(file.path))
-                     else changes.updated.push(Path.basename(file.path))
-                     Fs.writeFileSync(file.path, file.contents)
+         build.onStart(() => {
+            task.log.clear()
+            task.log.info("Build started...")
+         })
+         build.onEnd(async (result) => {
+            if (result.errors.length > 0) {
+               task.log.error(`Build failed with ${result.errors.length} error(s)`)
+            }
+            for (const error of result.errors) {
+               task.log.error(error)
+            }
+            for (const warning of result.warnings) {
+               task.log.warn(warning)
+            }
+            if (result.outputFiles) {
+               const tx = task.target.edit()
+               for (const file of result.outputFiles) {
+                  if (Buffer.from(file.contents).toString().includes(`__require("`)) {
+                     task.log.error(`Invalid '__require' detected in output chunk: ${file.path}`)
                   }
-                  files.set(file.path, file)
+                  if (file.path.startsWith(VirtualOutDir)) {
+                     const path = file.path.slice(VirtualOutDir.length)
+                     tx.commitFile(path, file.contents)
+                  }
+                  else {
+                     throw new Error(`Invalid output file: ${file.path}`)
+                  }
                }
-               const removed = storage.files.size - files.size - changes.added.length
-               if (removed !== 0 || changes.added.length !== 0 || changes.updated.length !== 0) {
-                  console.log(`[output] ${storage.name}: update ${changes.added.length + changes.updated.length} files(s)`)
-                  storage.files = files
-                  storage.on_changes.sendEventsToAll("change", changes)
-               }
-               else {
-                  console.log(`[output] ${storage.name}: no changes`)
-               }
+               task.target.store()
+               task.log.info(`Build completed with ${result.outputFiles.length} file(s)`)
             }
             return null
          })
@@ -222,19 +228,65 @@ export function StoragePlugin(storage: StorageFiles): esbuild.Plugin {
    }
 }
 
-export function ESModuleResolverPlugin(opts: {
-   routeds: MapLike<string>
-   replaceds: MapLike<string>
-}) {
-   const { routeds, replaceds } = opts
+export interface ESModuleResolverOptions {
+   task: ESModulesTask
+   routeds?: Record<string, string>
+   replaceds?: Record<string, string>
+}
+
+export function ESModuleResolverPlugin2(opts: ESModuleResolverOptions): esbuild.Plugin {
+
+   const internalLoaders: Record<string, esbuild.Loader> = {
+      ".ts": "ts", ".tsx": "tsx", ".js": "js", ".jsx": "jsx",
+      ".json": "json", ".txt": "text", ".md": "text", ".css": "css",
+   }
+
+
+   const FILE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.json']
+
+   /** Resolve a file path with extension probing */
+   function resolveFilePath(importPath: string, baseDir: string): string | null {
+      const resolved = Path.resolve(baseDir, importPath)
+
+      // Check if exact path exists
+      if (Fs.existsSync(resolved) && Fs.statSync(resolved).isFile()) {
+         return resolved
+      }
+
+      // Try with common extensions
+      for (const ext of FILE_EXTENSIONS) {
+         const withExt = resolved + ext
+         if (Fs.existsSync(withExt)) return withExt
+      }
+
+      // Try index files in directory
+      if (Fs.existsSync(resolved) && Fs.statSync(resolved).isDirectory()) {
+         for (const ext of FILE_EXTENSIONS) {
+            const indexPath = Path.join(resolved, `index${ext}`)
+            if (Fs.existsSync(indexPath)) return indexPath
+         }
+      }
+
+      return null
+   }
+
    return {
       name: 'esm-resolver',
       setup(build) {
-         const filter = /.*/
-         build.onResolve({ filter }, async (args) => {
-            try {
+         const { routeds = {}, replaceds = {}, task } = opts
+         const workspaceRoot = task.target.workspace.path
+
+         build.onResolve({ filter: /.*/ }, async (args) => {
+
+            // 0. Check for internal modules
+            if (task.internals.has(args.path)) {
+               return { path: args.path, namespace: "internal" }
+            }
+
+            // 1. Check for path routing (e.g., @mui/icons-material/ -> esm/)
+            if (args.with['esm-resolver'] !== "true") {
                for (const mod_id in routeds) {
-                  if (args.path.includes(mod_id) && args.with['esm-resolver'] !== "true") {
+                  if (args.path.includes(mod_id)) {
                      const esm_alt = args.path.replace(mod_id, routeds[mod_id])
                      const result = await build.resolve(esm_alt, {
                         kind: args.kind,
@@ -246,14 +298,36 @@ export function ESModuleResolverPlugin(opts: {
                      return result
                   }
                }
-               if (replaceds[args.path]) {
-                  return {
-                     path: replaceds[args.path],
-                     namespace: "file",
-                  }
-               }
-            } catch (e) {
             }
+
+            // 2. Check for explicit replacements first
+            if (replaceds[args.path]) {
+               return {
+                  path: replaceds[args.path],
+                  namespace: "file",
+               }
+            }
+
+            // 3. Handle relative/absolute file paths (entry points and local imports)
+            if (args.path.startsWith(".") || args.path.startsWith("/") || Path.isAbsolute(args.path)) {
+               const baseDir = args.resolveDir || workspaceRoot
+               const resolved = resolveFilePath(args.path, baseDir)
+               if (resolved) {
+                  return { path: resolved, namespace: "file" }
+               }
+            }
+
+         })
+
+         // Loader for internal modules
+         build.onLoad({ filter: /.*/, namespace: 'internal' }, (args) => {
+            const contents = task.internals.get(args.path)
+            if (contents === undefined) {
+               return { errors: [{ text: `Internal module not found: ${args.path}` }] }
+            }
+            const ext = Path.extname(args.path) || ".ts"
+            const loader = internalLoaders[ext] ?? "ts"
+            return { contents, loader, resolveDir: workspaceRoot }
          })
       },
    }

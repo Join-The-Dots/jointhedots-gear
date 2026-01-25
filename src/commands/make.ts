@@ -1,25 +1,33 @@
 import Path from 'node:path'
 import Fs from 'node:fs'
-import { CommandModule } from "yargs"
-import { StorageFiles } from "../model/storage.js"
-import { AppEntry, Library, open_workspace } from "../model/workspace.js"
-import { build_application } from "../builder/build-application.js"
-import { build_library, make_libname } from "../builder/build-library.js"
+import { type CommandModule } from "yargs"
+import { StorageFiles } from "../model/storage.ts"
+import { type AppEntry, Bundle, Library, open_workspace } from "../model/workspace.ts"
+import { build_application } from "../builder/build-application.ts"
+import { build_app_composable_bundle } from "../builder/build-app-bundle.ts"
+import { build_library } from "../builder/build-library.ts"
+import { makeNormalizedName, NameStyle } from '../utils/normalized-name.js'
 
-export function command_make(): CommandModule<any, {
+type MakeOptions = {
    watch?: boolean
    pack?: boolean
    versioned?: string
    devmode?: boolean
    clean?: boolean
+   dist?: string
+}
+
+export function command_make(): CommandModule<any, MakeOptions & {
    apps?: string
    libs?: string
-   dist?: string
+   bundles?: string
+   ws?: string
 }> {
    return {
       command: 'make',
       describe: 'Make distribuable artifacts',
       builder: (yargs) => yargs
+         .strict()
          .option("apps", {
             type: "string",
             default: "",
@@ -29,6 +37,12 @@ export function command_make(): CommandModule<any, {
             type: "string",
             default: "",
             describe: "List of libraries to make, ex: lib1,lib2,..."
+         })
+         .option("bundles", {
+            type: "string",
+            alias: "buns",
+            default: "",
+            describe: "List of bundles to make, ex: lib1,lib2,..."
          })
          .option("watch", {
             type: "boolean",
@@ -52,12 +66,17 @@ export function command_make(): CommandModule<any, {
             default: "*",
             describe: "Version applied to delivered package (use * for root package version)"
          })
+         .option("ws", {
+            type: "string",
+            default: ".",
+            describe: "Workspace directory"
+         })
          .option("dist", {
             type: "string",
             default: "./dist",
          }),
       handler: async (argv) => {
-         const ws = await open_workspace(".", argv.devmode)
+         const ws = await open_workspace(argv.ws, argv.devmode)
          if (argv.devmode) console.log("> Use devmode")
 
          let version = argv.versioned
@@ -78,19 +97,48 @@ export function command_make(): CommandModule<any, {
             }
          }
 
+         const bundles: Bundle[] = []
+         if (argv.bundles === "*") {
+            for (const bundle of ws.bundles) {
+               bundles.push(bundle)
+            }
+         }
+         else if (argv.bundles) {
+            for (const name of argv.bundles.split(",")) {
+               const bundle = ws.get_bundle(name)
+               if (bundle) bundles.push(bundle)
+               else console.error(`Bundle not found: ${name}`)
+            }
+         }
+
          let applications: AppEntry[] = []
          if (argv.apps) {
             for (const appname of argv.apps.split(",")) {
                const app = ws.get_application(appname)
                if (app) applications.push(app)
-               else console.error(`> application not found: ${appname}`)
+               else console.error(`application not found: ${appname}`)
             }
          }
 
          const pendings = []
+
+         if (bundles.length > 0) {
+            const shelve = new StorageFiles("shelve", Path.resolve(argv.dist, "shelve"))
+            for (const bundle of bundles) {
+               pendings.push(build_app_composable_bundle({
+                  bundle,
+                  shelve,
+                  version: version,
+                  devmode: argv.devmode,
+                  watch: argv.watch,
+                  clean: argv.clean || !argv.devmode,
+               }))
+            }
+         }
+
          for (const app of applications) {
             const { name } = app.descriptor
-            const outputDir = Path.resolve(argv.dist, make_libname(name))
+            const outputDir = Path.resolve(argv.dist, makeNormalizedName(name, NameStyle.WEBC))
             const storage = new StorageFiles(name, outputDir)
             pendings.push(build_application({
                app,
@@ -101,8 +149,9 @@ export function command_make(): CommandModule<any, {
                clean: argv.clean || !argv.devmode,
             }))
          }
+
          for (const lib of libraries) {
-            const outputDir = Path.resolve(argv.dist, make_libname(lib.name))
+            const outputDir = Path.resolve(argv.dist, makeNormalizedName(lib.name, NameStyle.WEBC))
             const storage = new StorageFiles(lib.name, outputDir)
             pendings.push(build_library({
                library: lib,
@@ -113,6 +162,7 @@ export function command_make(): CommandModule<any, {
                clean: argv.clean || !argv.devmode,
             }, argv.pack ? Path.resolve(argv.dist) : null))
          }
+
          await Promise.all(pendings)
       }
    }

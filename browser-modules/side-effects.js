@@ -1,7 +1,3 @@
-// Side effects script that provides Node.js globals for browser environment
-// This file is injected by esbuild to polyfill globals like Buffer
-
-import { Buffer } from './buffer.js'
-
-// Make Buffer available globally
-globalThis.Buffer = Buffer
+// Side effects script for browser environment
+// vite-plugin-node-polyfills handles most Node.js globals automatically
+// This file can be used for additional custom global setup if needed

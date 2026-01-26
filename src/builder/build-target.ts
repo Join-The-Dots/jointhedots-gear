@@ -5,9 +5,9 @@ import MIME from 'mime'
 import { makeComponentPublication, type ComponentCatalogsDescriptor, type ComponentID, type ComponentManifest, type ComponentPublication, type ResourceEntry } from "../model/component.ts"
 import { type AssetsEntry, Library, Workspace } from "../model/workspace.ts"
 import type { Log } from "../model/helpers/logger.ts"
-import { create_esbuild_context } from "../builder/esbuild-plugins.ts"
+import { create_vite_context, type ViteContext } from "../builder/vite-plugins.ts"
 import { copyToStorageStream, type IStorageTransaction, type IStorageZone } from "../model/storage.ts"
-import * as esbuild from 'esbuild'
+import type { Plugin } from 'vite'
 import { computeNameHashID } from "../utils/normalized-name.ts"
 
 export abstract class BuildTask {
@@ -106,8 +106,8 @@ export class ESModulesTask extends BuildTask {
    imports: { [file: string]: string } = {}
    internals = new Map<string, string>()
 
-   plugins: esbuild.Plugin[] = []
-   context: esbuild.BuildContext = null
+   plugins: Plugin[] = []
+   context: ViteContext = null
    transaction: IStorageTransaction = null
 
    add_entry(name: string, path: string) {
@@ -149,7 +149,7 @@ export class ESModulesTask extends BuildTask {
       }
 
       const { target } = this
-      this.context = await create_esbuild_context(this, target.devmode)
+      this.context = await create_vite_context(this, target.devmode)
 
       if (target.watch) {
          await this.context.watch()

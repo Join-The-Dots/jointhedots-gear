@@ -88,7 +88,7 @@ async function serve(port: number, storage: StorageFiles) {
       res.setHeader("Access-Control-Allow-Headers", "*")
       next()
    })
-   app.get('/esbuild', storage.on_changes.route())
+   app.get('/vite', storage.on_changes.route())
    app.get('/{*path}', storage.route())
    app.listen(port, () => {
       console.log(`Server is running at http://localhost:${port}`)

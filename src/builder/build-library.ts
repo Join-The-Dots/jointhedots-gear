@@ -59,17 +59,16 @@ export function create_library_target(opts: {
       }
    }
 
-   // Register esbuild plugin for external dependencies
+   // Register Vite plugin for external dependencies
    target.esmodules.plugins.push({
       name: "externals",
-      setup(build) {
+      resolveId(source) {
          const lib_prefix = lib.name + "/"
-         build.onResolve({ filter: /.*/ }, ({ path }) => {
-            if (path !== lib.name && !path.startsWith(lib_prefix) && !path.startsWith(".")) {
-               //console.log("> exclude:", path)
-               return { external: true }
-            }
-         })
+         if (source !== lib.name && !source.startsWith(lib_prefix) && !source.startsWith(".")) {
+            //console.log("> exclude:", source)
+            return { id: source, external: true }
+         }
+         return null
       }
    })
 

@@ -26,9 +26,9 @@ function create_application_composable_target(opts: {
    // Generate hotreload assets
    const html_injects: string[] = []
    if (opts.devserver) {
-      html_injects.push(`<script type="module" src="./esbuild-hotreload.js"></script>`)
-      target.assets.add_static_text(`esbuild-hotreload.js`,
-         `new EventSource('${opts.devserver}/esbuild').addEventListener('change', e => { location.reload() })`
+      html_injects.push(`<script type="module" src="./vite-hotreload.js"></script>`)
+      target.assets.add_static_text(`vite-hotreload.js`,
+         `new EventSource('${opts.devserver}/vite').addEventListener('change', e => { location.reload() })`
       )
    }
 

@@ -59,17 +59,16 @@ export function create_library_target(opts: {
       }
    }
 
-   // Register esbuild plugin for external dependencies
+   // Register rolldown plugin for external dependencies
    target.esmodules.plugins.push({
       name: "externals",
-      setup(build) {
+      resolveId(source) {
+         const path = source
          const lib_prefix = lib.name + "/"
-         build.onResolve({ filter: /.*/ }, ({ path }) => {
-            if (path !== lib.name && !path.startsWith(lib_prefix) && !path.startsWith(".")) {
-               //console.log("> exclude:", path)
-               return { external: true }
-            }
-         })
+         if (path !== lib.name && !path.startsWith(lib_prefix) && !path.startsWith(".")) {
+            return { id: path, external: true }
+         }
+         return null
       }
    })
 

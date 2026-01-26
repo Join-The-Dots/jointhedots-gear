@@ -129,68 +129,51 @@ export function create_bundle_target(opts: {
    }
    // TODO: traverse all workspace bundles to add their entrypoint has PathStatus.Dependency
 
-   // Register esbuild plugin for external dependencies
+   // Register rolldown plugin for external dependencies
    target.esmodules.plugins.push({
       name: "externals",
-      setup(build) {
-         const externalBundleModules = new Map<string, string>()
+      resolveId(source, importer) {
+         const path = source
+         const namespace = importer?.startsWith('\0external-bundle-proxy:') ? 'external-bundle-proxy' : undefined
+         
+         if (namespace === "external-bundle-proxy") {
+            return { id: source, external: true }
+         }
+         let state = paths_qualifier.check(path)
+         if (state === PathStatus.Dependency || state === PathStatus.External) {
+            return { id: path, external: true }
+         }
+         if (state === PathStatus.ExternalBundle) {
+            this.error(`ExternalBundle: ${path} <- ${importer}`)
+         }
+         if (state instanceof Bundle) {
+            const entry_id = state.resolve_export(path)
+            if (!entry_id) {
+               this.error(`Bundle '${state.id}' do not distribute expected entry: ${path}`)
+            }
+            if (entry_id.includes("#")) {
+               this.error(`TODO: manage module internal identifier access`)
+            }
 
-         build.onResolve({ filter: /.*/ }, (args) => {
-            const { namespace, path, importer } = args
-            if (namespace === "external-bundle-proxy") {
-               return { external: true }
-            }
-            let state = paths_qualifier.check(path)
-            if (state === PathStatus.Dependency || state === PathStatus.External) {
-               //target.log.info(`External: ${path} <- ${importer}`)
-               return { external: true }
-            }
-            if (state === PathStatus.ExternalBundle) {
-               throw new Error(`ExternalBundle: ${path} <- ${importer}`)
-            }
-            if (state instanceof Bundle) {
-               //target.log.info(`Bundle: ${state.id} <- ${importer}`)
-               const entry_id = state.resolve_export(path)
-               if (!entry_id) {
-                  return { errors: [{ text: `Bundle '${state.id}' do not distribute expected entry: ${path}` }] }
-               }
-               if (entry_id.includes("#")) {
-                  return { errors: [{ text: `TODO: manage module internal identifier access` }] }
-               }
-
-               // Create virtual module content that re-exports from external bundle
-               const externalPath = "/" + state.id + "/" + entry_id
-               const externalBundleModuleId = `external-bundle:${path}_proxy.cjs`
-               if (!externalBundleModules.has(externalBundleModuleId)) {
-                  // Use namespace import to safely handle modules that may not have default export
-                  const moduleContent = `import * as _ns from "${externalPath}"; module.exports={..._ns?.default,..._ns,default:_ns?.default,__esModule:true};`
-                  externalBundleModules.set(externalBundleModuleId, moduleContent)
-               }
-               return {
-                  path: externalBundleModuleId,
-                  namespace: "external-bundle-proxy",
-               }
-            }
-            //target.log.trace(`Internal: ${path} <- ${importer}`)
-         })
-
+            // Create virtual module content that re-exports from external bundle
+            const externalPath = "/" + state.id + "/" + entry_id
+            const externalBundleModuleId = `\0external-bundle-proxy:${path}_proxy.cjs`
+            return { id: externalBundleModuleId, meta: { externalPath, path } }
+         }
+         return null
+      },
+      load(id) {
          // Load virtual proxy modules for external bundle references
-         build.onLoad({ filter: /.*/, namespace: "external-bundle-proxy" }, (args) => {
-            const contents = externalBundleModules.get(args.path)
-            if (!contents) {
-               return { errors: [{ text: `External bundle proxy not found: ${args.path}` }] }
+         if (id.startsWith('\0external-bundle-proxy:')) {
+            const meta = this.getModuleInfo(id)?.meta
+            if (!meta?.externalPath) {
+               this.error(`External bundle proxy not found: ${id}`)
             }
-            return {
-               contents,
-               loader: "js",
-               resolveDir: target.workspace.path,
-            }
-         })
-
-         // Handle imports from within the proxy modules - these should be truly external
-         build.onResolve({ filter: /^\.\.\//, namespace: "external-bundle-proxy" }, (args) => {
-            return { path: args.path, external: true }
-         })
+            // Use namespace import to safely handle modules that may not have default export
+            const contents = `import * as _ns from "${meta.externalPath}"; export default {..._ns?.default,..._ns}; export * from "${meta.externalPath}";`
+            return { code: contents, moduleType: 'js' }
+         }
+         return null
       }
    })
 

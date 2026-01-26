@@ -1,5 +1,5 @@
 // Side effects script that provides Node.js globals for browser environment
-// This file is injected by esbuild to polyfill globals like Buffer
+// This file is injected by rolldown to polyfill globals like Buffer
 
 import { Buffer } from './buffer.js'
 

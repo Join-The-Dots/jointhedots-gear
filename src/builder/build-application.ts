@@ -1,6 +1,7 @@
 import { Library, matchComponentSelection, type AppEntry, type ChromeAppDescriptor, type ChromeAppManifest, type WebviewEntry } from "../model/workspace.ts"
 import { StorageFiles } from "../model/storage.ts"
 import { BuildTarget, BuildTask, ComponentCatalogsTask } from "./build-target.ts"
+import type { RolldownPlugin } from "./rolldown-plugins.ts"
 import type { WebAppManifest } from 'web-app-manifest'
 import Path from "node:path"
 import Fs from "node:fs"
@@ -321,13 +322,13 @@ function createIcon(base: Sharp.Sharp, size: number, format: "webp" | "png"): Pr
 }
 
 /**
- * Creates an esbuild plugin that deduplicates peer dependencies across workspace libraries.
+ * Creates a rolldown plugin that deduplicates peer dependencies across workspace libraries.
  * 
  * When multiple libraries declare the same peer dependency, this plugin ensures they all
  * resolve to the same version from the application's node_modules, preventing duplicate
  * bundles of packages like React, React DOM, etc.
  */
-function createPeersDependenciesDeduplicationPlugin(app: AppEntry, libs: Library[]): import('esbuild').Plugin {
+function createPeersDependenciesDeduplicationPlugin(app: AppEntry, libs: Library[]): RolldownPlugin {
    // Collect all peer dependencies from all workspace libraries
    const peerDependencies = new Map<string, string>()
 
@@ -370,52 +371,46 @@ function createPeersDependenciesDeduplicationPlugin(app: AppEntry, libs: Library
 
    return {
       name: "deduplicate-peers-dependencies",
-      setup(build) {
-         // Intercept resolution of peer dependencies
-         build.onResolve({ filter: /.*/ }, async (args) => {
-            // Avoid infinite recursion - skip if already processed by this plugin
-            if (args.pluginData?.deduplicatedPeer) {
-               return null
-            }
-
-            // Skip if not a bare module specifier (relative or absolute paths)
-            if (args.path.startsWith('.') || args.path.startsWith('/') || Path.isAbsolute(args.path)) {
-               return null
-            }
-
-            // Extract the package name (handle scoped packages like @scope/package)
-            const packageName = getPackageName(args.path)
-
-            // Check if this is a peer dependency we're tracking
-            if (!peerDependencies.has(packageName)) {
-               return null
-            }
-
-            // Check cache first
-            const cacheKey = args.path
-            if (resolvedPaths.has(cacheKey)) {
-               return { path: resolvedPaths.get(cacheKey), namespace: 'file' }
-            }
-
-            // Always resolve peer dependencies from the target node_modules
-            // This ensures all imports of the same package resolve to the same instance
-            const result = await build.resolve(args.path, {
-               kind: args.kind,
-               resolveDir: targetNodeModules,
-               importer: args.importer,
-               namespace: args.namespace,
-               pluginData: { ...args.pluginData, deduplicatedPeer: true },
-            })
-
-            if (!result.errors || result.errors.length === 0) {
-               // Cache the resolved path
-               resolvedPaths.set(cacheKey, result.path)
-               console.log(`[deduplicate-peers] ${args.path} -> ${result.path}`)
-               return result
-            }
-
+      async resolveId(source, importer, options) {
+         // Avoid infinite recursion - skip if already processed by this plugin
+         if (options?.custom?.deduplicatedPeer) {
             return null
+         }
+
+         // Skip if not a bare module specifier (relative or absolute paths)
+         if (source.startsWith('.') || source.startsWith('/') || Path.isAbsolute(source)) {
+            return null
+         }
+
+         // Extract the package name (handle scoped packages like @scope/package)
+         const packageName = getPackageName(source)
+
+         // Check if this is a peer dependency we're tracking
+         if (!peerDependencies.has(packageName)) {
+            return null
+         }
+
+         // Check cache first
+         const cacheKey = source
+         if (resolvedPaths.has(cacheKey)) {
+            return { id: resolvedPaths.get(cacheKey)! }
+         }
+
+         // Always resolve peer dependencies from the target node_modules
+         // This ensures all imports of the same package resolve to the same instance
+         const result = await this.resolve(source, targetNodeModules + '/package.json', {
+            skipSelf: true,
+            custom: { deduplicatedPeer: true },
          })
+
+         if (result && !result.external) {
+            // Cache the resolved path
+            resolvedPaths.set(cacheKey, result.id)
+            console.log(`[deduplicate-peers] ${source} -> ${result.id}`)
+            return result
+         }
+
+         return null
       }
    }
 }

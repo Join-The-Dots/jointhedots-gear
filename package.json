@@ -25,16 +25,15 @@
    },
    "dependencies": {
       "@aws-sdk/client-s3": "^3.968.0",
-      "@types/semver": "~7.7.1",
+      "@types/semver": "^7.7.1",
       "dotenv": "~17.2.3",
-      "esbuild": "~0.27.2",
-      "esbuild-sass-plugin": "~3.6.0",
-      "@jspm/core": "^2.1.0",
       "express": "~5.2.1",
       "glob": "~13.0.0",
       "mime": "~4.1.0",
       "node-watch": "~0.7.4",
       "postcss": "~8.5.6",
+      "rolldown": "^1.0.0-rc.1",
+      "rollup-plugin-polyfill-node": "^0.13.0",
       "sass": "~1.97.2",
       "semver": "~7.7.3",
       "sharp": "~0.34.5",
@@ -43,10 +42,10 @@
       "yargs": "~18.0.0"
    },
    "devDependencies": {
-      "@polycuber/script.cli": "~1.0.5",
-      "@types/chrome": "~0.1.33",
-      "@types/node": "~22.7.4",
-      "@types/web-app-manifest": "~1.0.9",
-      "@types/yargs": "~17.0.35"
+      "@polycuber/script.cli": "^1.0.5",
+      "@types/chrome": "^0.1.33",
+      "@types/node": "^22.7.4",
+      "@types/web-app-manifest": "^1.0.9",
+      "@types/yargs": "^17.0.35"
    }
 }

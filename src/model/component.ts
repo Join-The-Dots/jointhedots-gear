@@ -1,4 +1,4 @@
-import { isNormalizedName } from "../utils/normalized-name.ts"
+import { isNormalizedName, makeNormalizedName, NameStyle } from "../utils/normalized-name.ts"
 
 export type JSONSchema = any
 
@@ -73,10 +73,10 @@ export type ComponentCatalogsDescriptor = {
 
 export function checkComponentManifest(manif: ComponentManifest, path: string): Error {
    if (typeof manif.$id !== "string") {
-      return new Error(`Component descriptor shall have '$id' at: ${path}`)
+      return new Error(`Component shall have '$id' at: ${path}`)
    }
-   if (!isNormalizedName(manif.$id)) { 
-      return new Error(`Component descriptor have invalid '$id' -> '${manif.$id}' at: ${path}`)
+   if (!isNormalizedName(manif.$id)) {
+      return new Error(`Component have invalid '$id=${manif.$id}' sugest '${makeNormalizedName(manif.$id, NameStyle.OBJECT)}' at: ${path}`)
    }
    return null
 }

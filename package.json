@@ -20,15 +20,16 @@
       "dev:build:app": "node --enable-source-maps --watch-path=esm esm/cli make --apps playground:ui --ws ../jointhedots-core",
       "serve:mono": "node --enable-source-maps --watch-path=esm esm/cli serve --app playground:ui --devmode --port 3002 --ws ../jointhedots-core",
       "serve:host": "node --enable-source-maps --watch-path=esm esm/cli serve --app playground:ui:host  --port 3002 --ws ../jointhedots-core",
+      "serve:sfe": "node --enable-source-maps --watch-path=esm esm/cli serve --app sfe-webapp --devmode --ws ../sf-explorer-app",
       "prepublishOnly": "node prepublish.mjs"
    },
    "dependencies": {
       "@aws-sdk/client-s3": "^3.968.0",
-      "@esbuild-plugins/node-modules-polyfill": "~0.2.2",
       "@types/semver": "~7.7.1",
       "dotenv": "~17.2.3",
       "esbuild": "~0.27.2",
       "esbuild-sass-plugin": "~3.6.0",
+      "@jspm/core": "^2.1.0",
       "express": "~5.2.1",
       "glob": "~13.0.0",
       "mime": "~4.1.0",

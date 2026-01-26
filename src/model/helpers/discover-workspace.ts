@@ -19,9 +19,6 @@ async function discover_component(lib: Library, fpath: string) {
       lib.log.info(`+ component '${lib.name}': ${desc.$id}`)
    }
    catch (e) {
-      const data = await Fsp.readFile(fpath)
-      const desc = JSON.parse(data.toString()) as ComponentManifest
-      const err = checkComponentManifest(desc, fpath)
       lib.log.error(`! invalid component at ${fpath}: ${e?.message}`)
    }
 }

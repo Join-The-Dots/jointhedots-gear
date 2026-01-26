@@ -19,19 +19,23 @@ export type BuildApplicationOptions = {
 }
 
 function collect_app_libraries(app: AppEntry): Library[] {
-   const lib = app.library
-   const ws = lib.workspace
-   const deps = {
-      ...app.library.descriptor.dependencies,
-      ...app.library.descriptor.devDependencies,
-      ...app.library.descriptor.peerDependencies,
-   }
-   const libs: Library[] = []
-   for (const depId in deps) {
-      const lib = ws.get_library(depId)
-      if (ws.get_library(depId)) {
-         libs.push(lib)
+   const libs: Library[] = [app.library]
+   function collect_library_deps(lib: Library) {
+      const ws = lib.workspace
+      const deps = {
+         ...lib.descriptor.dependencies,
+         ...lib.descriptor.devDependencies,
+         ...lib.descriptor.peerDependencies,
       }
+      for (const depId in deps) {
+         const lib = ws.get_library(depId)
+         if (lib && !libs.includes(lib)) {
+            libs.push(lib)
+         }
+      }
+   }
+   for (let i = 0; i < libs.length; i++) {
+      collect_library_deps(libs[i])
    }
    return libs
 }
@@ -326,13 +330,13 @@ function createIcon(base: Sharp.Sharp, size: number, format: "webp" | "png"): Pr
 function createPeersDependenciesDeduplicationPlugin(app: AppEntry, libs: Library[]): import('esbuild').Plugin {
    // Collect all peer dependencies from all workspace libraries
    const peerDependencies = new Map<string, string>()
-   
+
    // Add app's own peer dependencies first (highest priority)
    const appPeers = app.library.descriptor.peerDependencies || {}
    for (const [name, version] of Object.entries(appPeers)) {
       peerDependencies.set(name, version as string)
    }
-   
+
    // Add peer dependencies from all dependent libraries
    for (const lib of libs) {
       const libPeers = lib.descriptor.peerDependencies || {}
@@ -346,7 +350,7 @@ function createPeersDependenciesDeduplicationPlugin(app: AppEntry, libs: Library
 
    // Find the app's node_modules path (where app dependencies are installed)
    const appNodeModules = Path.join(app.library.path, 'node_modules')
-   
+
    // Find the root node_modules path from workspace search directories
    const ws = app.library.workspace
    const rootNodeModules = ws.search_directories[0] || Path.join(ws.path, 'node_modules')
@@ -381,7 +385,7 @@ function createPeersDependenciesDeduplicationPlugin(app: AppEntry, libs: Library
 
             // Extract the package name (handle scoped packages like @scope/package)
             const packageName = getPackageName(args.path)
-            
+
             // Check if this is a peer dependency we're tracking
             if (!peerDependencies.has(packageName)) {
                return null

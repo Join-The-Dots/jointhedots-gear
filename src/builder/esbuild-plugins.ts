@@ -5,7 +5,6 @@ import MIME from 'mime'
 import postcss from 'postcss'
 import * as esbuild from 'esbuild'
 import { sassPlugin } from 'esbuild-sass-plugin'
-import { NodeModulesPolyfillPlugin } from "@esbuild-plugins/node-modules-polyfill"
 import { ESModulesTask } from "./build-target.ts"
 import { PackageRootDir } from "../utils/file.ts"
 
@@ -17,15 +16,70 @@ export async function create_esbuild_context(
 ): Promise<esbuild.BuildContext> {
    const ws = task.target.workspace
 
-   // Define modules mapping
+   // Define modules mapping - using @jspm/core polyfills (same as Vite)
+   const jspmPolyfills = Path.resolve(PackageRootDir, "node_modules/@jspm/core/nodelibs/browser")
+
+   // Side effects script that provides Node.js globals (like Buffer) for browser environment
+   const sideEffectsScript = Path.resolve(PackageRootDir, "./browser-modules/side-effects.js")
+
+   // Helper to create both "module" and "node:module" entries
+   function withNodePrefix(mappings: Record<string, string>): Record<string, string> {
+      const result: Record<string, string> = {}
+      for (const [key, value] of Object.entries(mappings)) {
+         result[key] = value
+         result[`node:${key}`] = value
+      }
+      return result
+   }
+
    const modules_mapping: ESModuleResolverOptions = {
       task,
       routeds: {
          "@mui/icons-material/": "@mui/icons-material/esm/"
       },
       replaceds: {
-         "buffer": Path.resolve(PackageRootDir, "./browser-modules/buffer.js"),
-         "process": Path.resolve(PackageRootDir, "./browser-modules/process.js"),
+         // ESM shims for problematic CJS modules
+         "asap": Path.resolve(PackageRootDir, "./browser-modules/asap.js"),
+         "asap/raw": Path.resolve(PackageRootDir, "./browser-modules/asap-raw.js"),
+         // Node.js polyfills
+         ...withNodePrefix({
+            "buffer": Path.resolve(PackageRootDir, "./browser-modules/buffer.js"),
+            "process": Path.resolve(PackageRootDir, "./browser-modules/process.js"),
+            "util": Path.resolve(PackageRootDir, "./browser-modules/util.js"),
+            "child_process": `${jspmPolyfills}/child_process.js`,
+            "events": `${jspmPolyfills}/events.js`,
+            "stream": `${jspmPolyfills}/stream.js`,
+            "readable-stream": `${jspmPolyfills}/stream.js`,
+            "path": `${jspmPolyfills}/path.js`,
+            "os": `${jspmPolyfills}/os.js`,
+            "crypto": `${jspmPolyfills}/crypto.js`,
+            "fs": `${jspmPolyfills}/fs.js`,
+            "assert": `${jspmPolyfills}/assert.js`,
+            "url": `${jspmPolyfills}/url.js`,
+            "querystring": `${jspmPolyfills}/querystring.js`,
+            "string_decoder": `${jspmPolyfills}/string_decoder.js`,
+            "punycode": `${jspmPolyfills}/punycode.js`,
+            "http": `${jspmPolyfills}/http.js`,
+            "https": `${jspmPolyfills}/https.js`,
+            "zlib": `${jspmPolyfills}/zlib.js`,
+            "constants": `${jspmPolyfills}/constants.js`,
+            "timers": `${jspmPolyfills}/timers.js`,
+            "console": `${jspmPolyfills}/console.js`,
+            "vm": `${jspmPolyfills}/vm.js`,
+            "domain": `${jspmPolyfills}/domain.js`,
+            "tty": `${jspmPolyfills}/tty.js`,
+            "net": `${jspmPolyfills}/net.js`,
+            "dns": `${jspmPolyfills}/dns.js`,
+            "dgram": `${jspmPolyfills}/dgram.js`,
+            "cluster": `${jspmPolyfills}/cluster.js`,
+            "module": `${jspmPolyfills}/module.js`,
+            "readline": `${jspmPolyfills}/readline.js`,
+            "repl": `${jspmPolyfills}/repl.js`,
+            "tls": `${jspmPolyfills}/tls.js`,
+            "worker_threads": `${jspmPolyfills}/worker_threads.js`,
+            "perf_hooks": `${jspmPolyfills}/perf_hooks.js`,
+            "async_hooks": `${jspmPolyfills}/async_hooks.js`,
+         })
       }
    }
 
@@ -54,8 +108,10 @@ export async function create_esbuild_context(
       jsx: "automatic",
       jsxImportSource: "react",
       mainFields: ['browser', 'module', 'main', 'index'],
+      inject: [sideEffectsScript],
       define: {
          //'globalThis': 'window',
+         'global': 'globalThis',
          "process.browser": "true",
          "process.env.NODE_ENV": JSON.stringify(devmode ? "development" : "production"),
          ...workspace_constants,
@@ -63,7 +119,6 @@ export async function create_esbuild_context(
       plugins: [
          ...task.plugins,
          ESModuleResolverPlugin2(modules_mapping),
-         NodeModulesPolyfillPlugin(),
          StyleSheetPlugin(task),
          StoragePlugin(task),
       ],
@@ -169,6 +224,105 @@ function copyAssets(task: ESModulesTask) {
             handleUrlDecl(decl, result)
          }
       })
+   }
+}
+
+/**
+ * Plugin to fix CJS interop issues when a module exports a function directly
+ * via `module.exports = fn` and then adds properties to that function.
+ * 
+ * The issue: When esbuild converts CJS `require()` to ESM imports, modules that
+ * export a function directly with properties attached (like `module.exports = fn; fn.prop = x`)
+ * may not work correctly because the ESM interop wraps things in unexpected ways.
+ * 
+ * This plugin converts such CJS modules to proper ESM by:
+ * 1. Converting `require()` calls to ESM imports
+ * 2. Wrapping the code to provide `module` and `exports`
+ * 3. Exporting `module.exports` as the default export
+ */
+export function CJSInteropFixPlugin(): esbuild.Plugin {
+   // List of known problematic CJS modules that export functions with properties
+   // These modules need special handling for proper ESM interop
+   const KNOWN_FUNCTION_EXPORT_MODULES = [
+      /[\\/]asap[\\/].*\.js$/,      // asap package
+      /[\\/]browser-raw\.js$/,       // asap's browser-raw.js specifically
+   ]
+
+   return {
+      name: 'cjs-interop-fix',
+      setup(build) {
+         build.onLoad({ filter: /\.js$/, namespace: 'file' }, async (args) => {
+            // Only process known problematic modules
+            const isKnownModule = KNOWN_FUNCTION_EXPORT_MODULES.some(pattern => pattern.test(args.path))
+            if (!isKnownModule) return null
+
+            // Skip @jspm/core polyfills - they're already ESM
+            if (args.path.includes('@jspm/core') || args.path.includes('@jspm\\core')) return null
+
+            let contents: string
+            try {
+               contents = await Fs.promises.readFile(args.path, 'utf8')
+            } catch {
+               return null
+            }
+
+            // Skip if already ESM (has import/export at top level without module.exports)
+            if (/^\s*(import|export)\s/m.test(contents) && !contents.includes('module.exports')) {
+               return null
+            }
+
+            // Skip if it doesn't use module.exports at all
+            if (!contents.includes('module.exports')) {
+               return null
+            }
+
+            // Extract require statements and convert to imports
+            const requires: { varName: string; modulePath: string; fullMatch: string }[] = []
+            const requireRegex = /var\s+([\w$]+)\s*=\s*require\s*\(\s*["']([^"']+)["']\s*\)\s*;?/g
+            let match: RegExpExecArray | null
+            
+            while ((match = requireRegex.exec(contents)) !== null) {
+               requires.push({
+                  varName: match[1],
+                  modulePath: match[2],
+                  fullMatch: match[0]
+               })
+            }
+
+            // Build the import statements
+            const imports = requires.map((r, i) => 
+               `import __cjs_import_${i}__ from "${r.modulePath}";`
+            ).join('\n')
+
+            // Build variable assignments from imports (handle default export unwrapping)
+            const importAssignments = requires.map((r, i) => 
+               `var ${r.varName} = __cjs_import_${i}__;`
+            ).join('\n')
+
+            // Remove require statements from content
+            let transformedContent = contents
+            for (const r of requires) {
+               transformedContent = transformedContent.replace(r.fullMatch, `// ${r.fullMatch}`)
+            }
+
+            // Build the transformed module
+            const transformed = `${imports}
+var __cjs_exports__ = {};
+var __cjs_module__ = { exports: __cjs_exports__ };
+(function(module, exports) {
+${importAssignments}
+${transformedContent}
+})(__cjs_module__, __cjs_exports__);
+var __cjs_result__ = __cjs_module__.exports;
+export default __cjs_result__;
+`
+            return {
+               contents: transformed,
+               loader: 'js',
+               resolveDir: Path.dirname(args.path)
+            }
+         })
+      }
    }
 }
 

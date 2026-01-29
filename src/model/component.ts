@@ -76,7 +76,7 @@ export function checkComponentManifest(manif: ComponentManifest, path: string): 
       return new Error(`Component shall have '$id' at: ${path}`)
    }
    if (!isNormalizedName(manif.$id)) {
-      return new Error(`Component have invalid '$id=${manif.$id}' sugest '${makeNormalizedName(manif.$id, NameStyle.OBJECT)}' at: ${path}`)
+      return new Error(`Component have invalid '$id=${manif.$id}' suggest '${makeNormalizedName(manif.$id, NameStyle.OBJECT)}' at: ${path}`)
    }
    return null
 }

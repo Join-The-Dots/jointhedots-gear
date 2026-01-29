@@ -101,9 +101,13 @@ export function create_application_monolith_target(opts: {
 
    // Add application modules
    for (const name in modules) {
-      if (name.endsWith(".js")) {
-         const entry_name = lib.make_file_id("module", name.slice(0, -3))
-         target.esmodules.add_entry_typescript(`export * from "./${entry_name}.js"`, name.slice(0, -3))
+      const entry_path = app.library.resolve_entry_path(modules[name], app.baseDir)
+      if (!entry_path) {
+         target.log.error(`Invalid module '${name}' path at ${entry_path}`)
+      }
+      else if (name.endsWith(".js")) {
+         const entry_name = name.slice(0, -3)
+         target.esmodules.add_entry(entry_name, entry_path)
          if (opts.devserver) {
             target.log.info(`+ module '${app.library.name}': ${name} : ${opts.devserver}/${name}`)
          }

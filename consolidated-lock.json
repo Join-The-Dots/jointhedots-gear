@@ -1,0 +1,433 @@
+{
+  "name": "@jointhedots/core",
+  "version": "0.0.0",
+  "lockfileVersion": 3,
+  "requires": true,
+  "packages": {
+    "": {
+      "name": "@jointhedots/core",
+      "version": "0.0.0",
+      "license": "MIT",
+      "dependencies": {
+        "acorn": "^8.15.0",
+        "astring": "^1.9.0",
+        "json-schema": "^0.4.0",
+        "query-string": "^9.1.0",
+        "react-lightning-design-system": "^5.9.1",
+        "vscode-uri": "^3.1.0",
+        "yaml": "^2.8.2",
+        "zod": "^4.2.1"
+      },
+      "devDependencies": {
+        "typescript": "^5.9.3"
+      },
+      "optionalDependencies": {
+        "hono": "^4.11.3"
+      },
+      "peerDependencies": {
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core"
+    },
+    "node_modules/@babel/runtime": {
+      "version": "7.28.4",
+      "resolved": "https://registry.npmjs.org/@babel/runtime/-/runtime-7.28.4.tgz",
+      "integrity": "sha512-Q/N6JNWvIvPnLDvjlE1OUBLPQHH6l3CltCEsHIujp45zQUSSh8K+gHnaEX45yAT1nyngnINhvWtzN+Nb9D8RAQ==",
+      "license": "MIT",
+      "engines": {
+        "node": ">=6.9.0"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\@babel\\runtime"
+    },
+    "node_modules/@types/prop-types": {
+      "version": "15.7.15",
+      "resolved": "https://registry.npmjs.org/@types/prop-types/-/prop-types-15.7.15.tgz",
+      "integrity": "sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw==",
+      "license": "MIT",
+      "peer": true,
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\@types\\prop-types"
+    },
+    "node_modules/@types/react": {
+      "version": "18.3.27",
+      "resolved": "https://registry.npmjs.org/@types/react/-/react-18.3.27.tgz",
+      "integrity": "sha512-cisd7gxkzjBKU2GgdYrTdtQx1SORymWyaAFhaxQPK9bYO9ot3Y5OikQRvY0VYQtvwjeQnizCINJAenh/V7MK2w==",
+      "license": "MIT",
+      "peer": true,
+      "dependencies": {
+        "@types/prop-types": "*",
+        "csstype": "^3.2.2"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\@types\\react"
+    },
+    "node_modules/acorn": {
+      "version": "8.15.0",
+      "resolved": "https://registry.npmjs.org/acorn/-/acorn-8.15.0.tgz",
+      "integrity": "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==",
+      "license": "MIT",
+      "bin": {
+        "acorn": "bin/acorn"
+      },
+      "engines": {
+        "node": ">=0.4.0"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\acorn"
+    },
+    "node_modules/astring": {
+      "version": "1.9.0",
+      "resolved": "https://registry.npmjs.org/astring/-/astring-1.9.0.tgz",
+      "integrity": "sha512-LElXdjswlqjWrPpJFg1Fx4wpkOCxj1TDHlSV4PlaRxHGWko024xICaa97ZkMfs6DRKlCguiAI+rbXv5GWwXIkg==",
+      "license": "MIT",
+      "bin": {
+        "astring": "bin/astring"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\astring"
+    },
+    "node_modules/classnames": {
+      "version": "2.5.1",
+      "resolved": "https://registry.npmjs.org/classnames/-/classnames-2.5.1.tgz",
+      "integrity": "sha512-saHYOzhIQs6wy2sVxTM6bUDsQO4F50V9RQ22qBpEdCW+I+/Wmke2HOl6lS6dTpdxVhb88/I6+Hs+438c3lfUow==",
+      "license": "MIT",
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\classnames"
+    },
+    "node_modules/csstype": {
+      "version": "3.2.3",
+      "resolved": "https://registry.npmjs.org/csstype/-/csstype-3.2.3.tgz",
+      "integrity": "sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==",
+      "license": "MIT",
+      "peer": true,
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\csstype"
+    },
+    "node_modules/dayjs": {
+      "version": "1.11.19",
+      "resolved": "https://registry.npmjs.org/dayjs/-/dayjs-1.11.19.tgz",
+      "integrity": "sha512-t5EcLVS6QPBNqM2z8fakk/NKel+Xzshgt8FFKAn+qwlD1pzZWxh0nVCrvFK7ZDb6XucZeF9z8C7CBWTRIVApAw==",
+      "license": "MIT",
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\dayjs"
+    },
+    "node_modules/debounce": {
+      "version": "1.2.1",
+      "resolved": "https://registry.npmjs.org/debounce/-/debounce-1.2.1.tgz",
+      "integrity": "sha512-XRRe6Glud4rd/ZGQfiV1ruXSfbvfJedlV9Y6zOlP+2K04vBYiJEte6stfFkCP03aMnY5tsipamumUjL14fofug==",
+      "license": "MIT",
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\debounce"
+    },
+    "node_modules/decode-uri-component": {
+      "version": "0.4.1",
+      "resolved": "https://registry.npmjs.org/decode-uri-component/-/decode-uri-component-0.4.1.tgz",
+      "integrity": "sha512-+8VxcR21HhTy8nOt6jf20w0c9CADrw1O8d+VZ/YzzCt4bJ3uBjw+D1q2osAB8RnpwwaeYBxy0HyKQxD5JBMuuQ==",
+      "license": "MIT",
+      "engines": {
+        "node": ">=14.16"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\decode-uri-component"
+    },
+    "node_modules/exenv": {
+      "version": "1.2.2",
+      "resolved": "https://registry.npmjs.org/exenv/-/exenv-1.2.2.tgz",
+      "integrity": "sha512-Z+ktTxTwv9ILfgKCk32OX3n/doe+OcLTRtqK9pcL+JsP3J1/VW8Uvl4ZjLlKqeW4rzK4oesDOGMEMRIZqtP4Iw==",
+      "license": "BSD-3-Clause",
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\exenv"
+    },
+    "node_modules/filter-obj": {
+      "version": "5.1.0",
+      "resolved": "https://registry.npmjs.org/filter-obj/-/filter-obj-5.1.0.tgz",
+      "integrity": "sha512-qWeTREPoT7I0bifpPUXtxkZJ1XJzxWtfoWWkdVGqa+eCr3SHW/Ocp89o8vLvbUuQnadybJpjOKu4V+RwO6sGng==",
+      "license": "MIT",
+      "engines": {
+        "node": ">=14.16"
+      },
+      "funding": {
+        "url": "https://github.com/sponsors/sindresorhus"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\filter-obj"
+    },
+    "node_modules/hono": {
+      "version": "4.11.3",
+      "resolved": "https://registry.npmjs.org/hono/-/hono-4.11.3.tgz",
+      "integrity": "sha512-PmQi306+M/ct/m5s66Hrg+adPnkD5jiO6IjA7WhWw0gSBSo1EcRegwuI1deZ+wd5pzCGynCcn2DprnE4/yEV4w==",
+      "license": "MIT",
+      "optional": true,
+      "engines": {
+        "node": ">=16.9.0"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\hono"
+    },
+    "node_modules/js-tokens": {
+      "version": "4.0.0",
+      "resolved": "https://registry.npmjs.org/js-tokens/-/js-tokens-4.0.0.tgz",
+      "integrity": "sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==",
+      "license": "MIT",
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\js-tokens"
+    },
+    "node_modules/json-schema": {
+      "version": "0.4.0",
+      "resolved": "https://registry.npmjs.org/json-schema/-/json-schema-0.4.0.tgz",
+      "integrity": "sha512-es94M3nTIfsEPisRafak+HDLfHXnKBhV3vU5eqPcS3flIWqcxJWgXHXiey3YrpaNsanY5ei1VoYEbOzijuq9BA==",
+      "license": "(AFL-2.1 OR BSD-3-Clause)",
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\json-schema"
+    },
+    "node_modules/keycoder": {
+      "version": "1.1.1",
+      "resolved": "https://registry.npmjs.org/keycoder/-/keycoder-1.1.1.tgz",
+      "integrity": "sha512-a5/Z1O28CLLGtzOmknZPPCze8OG8ZavCYRxB/GGfqyHMP3i1zTyBHCp6oyCNA4S/0jhOWIK/Sb7Zbaof6XY+yw==",
+      "license": "MIT",
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\keycoder"
+    },
+    "node_modules/loose-envify": {
+      "version": "1.4.0",
+      "resolved": "https://registry.npmjs.org/loose-envify/-/loose-envify-1.4.0.tgz",
+      "integrity": "sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==",
+      "license": "MIT",
+      "dependencies": {
+        "js-tokens": "^3.0.0 || ^4.0.0"
+      },
+      "bin": {
+        "loose-envify": "cli.js"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\loose-envify"
+    },
+    "node_modules/object-assign": {
+      "version": "4.1.1",
+      "resolved": "https://registry.npmjs.org/object-assign/-/object-assign-4.1.1.tgz",
+      "integrity": "sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==",
+      "license": "MIT",
+      "engines": {
+        "node": ">=0.10.0"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\object-assign"
+    },
+    "node_modules/prop-types": {
+      "version": "15.8.1",
+      "resolved": "https://registry.npmjs.org/prop-types/-/prop-types-15.8.1.tgz",
+      "integrity": "sha512-oj87CgZICdulUohogVAR7AjlC0327U4el4L6eAvOqCeudMDVU0NThNaV+b9Df4dXgSP1gXMTnPdhfe/2qDH5cg==",
+      "license": "MIT",
+      "dependencies": {
+        "loose-envify": "^1.4.0",
+        "object-assign": "^4.1.1",
+        "react-is": "^16.13.1"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\prop-types"
+    },
+    "node_modules/query-string": {
+      "version": "9.3.1",
+      "resolved": "https://registry.npmjs.org/query-string/-/query-string-9.3.1.tgz",
+      "integrity": "sha512-5fBfMOcDi5SA9qj5jZhWAcTtDfKF5WFdd2uD9nVNlbxVv1baq65aALy6qofpNEGELHvisjjasxQp7BlM9gvMzw==",
+      "license": "MIT",
+      "dependencies": {
+        "decode-uri-component": "^0.4.1",
+        "filter-obj": "^5.1.0",
+        "split-on-first": "^3.0.0"
+      },
+      "engines": {
+        "node": ">=18"
+      },
+      "funding": {
+        "url": "https://github.com/sponsors/sindresorhus"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\query-string"
+    },
+    "node_modules/react": {
+      "version": "18.3.1",
+      "resolved": "https://registry.npmjs.org/react/-/react-18.3.1.tgz",
+      "integrity": "sha512-wS+hAgJShR0KhEvPJArfuPVN1+Hz1t0Y6n5jLrGQbkb4urgPE/0Rve+1kMB1v/oWgHgm4WIcV+i7F2pTVj+2iQ==",
+      "license": "MIT",
+      "peer": true,
+      "dependencies": {
+        "loose-envify": "^1.1.0"
+      },
+      "engines": {
+        "node": ">=0.10.0"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\react"
+    },
+    "node_modules/react-dom": {
+      "version": "18.3.1",
+      "resolved": "https://registry.npmjs.org/react-dom/-/react-dom-18.3.1.tgz",
+      "integrity": "sha512-5m4nQKp+rZRb09LNH59GM4BxTh9251/ylbKIbpe7TpGxfJ+9kv6BLkLBXIjjspbgbnIBNqlI23tRnTWT0snUIw==",
+      "license": "MIT",
+      "peer": true,
+      "dependencies": {
+        "loose-envify": "^1.1.0",
+        "scheduler": "^0.23.2"
+      },
+      "peerDependencies": {
+        "react": "^18.3.1"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\react-dom"
+    },
+    "node_modules/react-is": {
+      "version": "16.13.1",
+      "resolved": "https://registry.npmjs.org/react-is/-/react-is-16.13.1.tgz",
+      "integrity": "sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==",
+      "license": "MIT",
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\react-is"
+    },
+    "node_modules/react-lightning-design-system": {
+      "version": "5.9.1",
+      "resolved": "https://registry.npmjs.org/react-lightning-design-system/-/react-lightning-design-system-5.9.1.tgz",
+      "integrity": "sha512-jtC/cGDXmPHiEnPovvHwI0/GrQR64mnWwyeiuJ0Gu4LKlwcJBzIl7vIfQDYIKtURbo1KrT3ALSQwrmvlJ1EPGw==",
+      "license": "MIT",
+      "dependencies": {
+        "@babel/runtime": "^7.17.9",
+        "classnames": "^2.3.1",
+        "dayjs": "^1.11.2",
+        "keycoder": "^1.1.1",
+        "react-merge-refs": "^1.1.0",
+        "react-relative-portal": "github:stomita/react-relative-portal#dist",
+        "svg4everybody": "^2.1.9"
+      },
+      "peerDependencies": {
+        "@types/react": "^17.0.0 || ^18.0.0",
+        "react": "^17.0.0 || ^18.0.0",
+        "react-dom": "^17.0.0 || ^18.0.0"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\react-lightning-design-system"
+    },
+    "node_modules/react-merge-refs": {
+      "version": "1.1.0",
+      "resolved": "https://registry.npmjs.org/react-merge-refs/-/react-merge-refs-1.1.0.tgz",
+      "integrity": "sha512-alTKsjEL0dKH/ru1Iyn7vliS2QRcBp9zZPGoWxUOvRGWPUYgjo+V01is7p04It6KhgrzhJGnIj9GgX8W4bZoCQ==",
+      "license": "MIT",
+      "funding": {
+        "type": "github",
+        "url": "https://github.com/sponsors/gregberge"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\react-merge-refs"
+    },
+    "node_modules/react-relative-portal": {
+      "version": "1.3.1",
+      "resolved": "file:../../deps/react-relative-portal-1.3.1.tgz",
+      "integrity": "sha512-Fu63a7lt7Qxr6sGicj10dFAcn8JwRYpEi+lXQTcU2ChrgMRne2Se/u5YCGftctNYYskmAZQSCNOGJNayNCbsXQ==",
+      "license": "MIT",
+      "dependencies": {
+        "debounce": "^1.0.0",
+        "exenv": "^1.2.1",
+        "prop-types": "^15.6.0"
+      },
+      "peerDependencies": {
+        "react": ">=0.14.0",
+        "react-dom": ">=0.14.0"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\react-relative-portal"
+    },
+    "node_modules/scheduler": {
+      "version": "0.23.2",
+      "resolved": "https://registry.npmjs.org/scheduler/-/scheduler-0.23.2.tgz",
+      "integrity": "sha512-UOShsPwz7NrMUqhR6t0hWjFduvOzbtv7toDH1/hIrfRNIDBnnBWd0CwJTGvTpngVlmwGCdP9/Zl/tVrDqcuYzQ==",
+      "license": "MIT",
+      "peer": true,
+      "dependencies": {
+        "loose-envify": "^1.1.0"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\scheduler"
+    },
+    "node_modules/split-on-first": {
+      "version": "3.0.0",
+      "resolved": "https://registry.npmjs.org/split-on-first/-/split-on-first-3.0.0.tgz",
+      "integrity": "sha512-qxQJTx2ryR0Dw0ITYyekNQWpz6f8dGd7vffGNflQQ3Iqj9NJ6qiZ7ELpZsJ/QBhIVAiDfXdag3+Gp8RvWa62AA==",
+      "license": "MIT",
+      "engines": {
+        "node": ">=12"
+      },
+      "funding": {
+        "url": "https://github.com/sponsors/sindresorhus"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\split-on-first"
+    },
+    "node_modules/svg4everybody": {
+      "version": "2.1.9",
+      "resolved": "https://registry.npmjs.org/svg4everybody/-/svg4everybody-2.1.9.tgz",
+      "integrity": "sha512-AS9WORVV/vk520ZHxGTlQzyDBizp/h6WyAYUbKhze/kwvQr43DwJpkIIPBomsUyKqN7N+h1deF92N9PmW+o+9A==",
+      "license": "CC0-1.0",
+      "engines": {
+        "node": ">=0.8.0"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\svg4everybody"
+    },
+    "node_modules/typescript": {
+      "version": "5.9.3",
+      "resolved": "https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz",
+      "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+      "dev": true,
+      "license": "Apache-2.0",
+      "bin": {
+        "tsc": "bin/tsc",
+        "tsserver": "bin/tsserver"
+      },
+      "engines": {
+        "node": ">=14.17"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\typescript"
+    },
+    "node_modules/vscode-uri": {
+      "version": "3.1.0",
+      "resolved": "https://registry.npmjs.org/vscode-uri/-/vscode-uri-3.1.0.tgz",
+      "integrity": "sha512-/BpdSx+yCQGnCvecbyXdxHDkuk55/G3xwnC0GqY4gmQ3j+A+g8kzzgB4Nk/SINjqn6+waqw3EgbVF2QKExkRxQ==",
+      "license": "MIT",
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\vscode-uri"
+    },
+    "node_modules/yaml": {
+      "version": "2.8.2",
+      "resolved": "https://registry.npmjs.org/yaml/-/yaml-2.8.2.tgz",
+      "integrity": "sha512-mplynKqc1C2hTVYxd0PU2xQAc22TI1vShAYGksCCfxbn/dFwnHTNi1bvYsBTkhdUNtGIf5xNOg938rrSSYvS9A==",
+      "license": "ISC",
+      "bin": {
+        "yaml": "bin.mjs"
+      },
+      "engines": {
+        "node": ">= 14.6"
+      },
+      "funding": {
+        "url": "https://github.com/sponsors/eemeli"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\yaml"
+    },
+    "node_modules/zod": {
+      "version": "4.2.1",
+      "resolved": "https://registry.npmjs.org/zod/-/zod-4.2.1.tgz",
+      "integrity": "sha512-0wZ1IRqGGhMP76gLqz8EyfBXKk0J2qo2+H3fi4mcUP/KtTocoX08nmIAHl1Z2kJIZbZee8KOpBCSNPRgauucjw==",
+      "license": "MIT",
+      "funding": {
+        "url": "https://github.com/sponsors/colinhacks"
+      },
+      "location": "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\zod"
+    }
+  },
+  "packagesLocations": {
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core": "",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\@babel\\runtime": "node_modules/@babel/runtime",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\@types\\prop-types": "node_modules/@types/prop-types",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\@types\\react": "node_modules/@types/react",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\acorn": "node_modules/acorn",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\astring": "node_modules/astring",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\classnames": "node_modules/classnames",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\csstype": "node_modules/csstype",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\dayjs": "node_modules/dayjs",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\debounce": "node_modules/debounce",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\decode-uri-component": "node_modules/decode-uri-component",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\exenv": "node_modules/exenv",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\filter-obj": "node_modules/filter-obj",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\hono": "node_modules/hono",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\js-tokens": "node_modules/js-tokens",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\json-schema": "node_modules/json-schema",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\keycoder": "node_modules/keycoder",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\loose-envify": "node_modules/loose-envify",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\object-assign": "node_modules/object-assign",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\prop-types": "node_modules/prop-types",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\query-string": "node_modules/query-string",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\react": "node_modules/react",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\react-dom": "node_modules/react-dom",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\react-is": "node_modules/react-is",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\react-lightning-design-system": "node_modules/react-lightning-design-system",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\react-merge-refs": "node_modules/react-merge-refs",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\react-relative-portal": "node_modules/react-relative-portal",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\scheduler": "node_modules/scheduler",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\split-on-first": "node_modules/split-on-first",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\svg4everybody": "node_modules/svg4everybody",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\typescript": "node_modules/typescript",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\vscode-uri": "node_modules/vscode-uri",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\yaml": "node_modules/yaml",
+    "C:\\dev\\explorer\\jointhedots-core\\packages\\jointhedots-core\\node_modules\\zod": "node_modules/zod"
+  }
+}

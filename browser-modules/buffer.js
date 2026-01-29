@@ -2096,4 +2096,6 @@ function BufferBigIntNotDefined() {
 
 globalThis.Buffer = Buffer
 
-export { Buffer, SlowBuffer }
+const isBuffer = Buffer.isBuffer
+
+export { Buffer, SlowBuffer, isBuffer }

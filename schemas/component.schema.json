@@ -5,14 +5,20 @@
    "description": "A generic schema for component manifests, allowing custom and standard service/spec definitions.",
    "type": "object",
    "required": [
-      "$id",
-      "specs",
-      "services"
+      "$id"
    ],
    "properties": {
       "$id": {
          "type": "string",
          "description": "A unique identifier for the component."
+      },
+      "type": {
+         "type": "string",
+         "description": "Optional type of the component when component managed by a component."
+      },
+      "name": {
+         "type": "string",
+         "description": "Optional name of the component."
       },
       "title": {
          "type": "string",
@@ -28,7 +34,7 @@
       },
       "tags": {
          "type": "array",
-         "description": "Optional list of tags (for fonctionnal matching).",
+         "description": "Optional list of tags (for functional matching).",
          "items": {
             "type": "string"
          }
@@ -36,6 +42,13 @@
       "keywords": {
          "type": "array",
          "description": "Optional list of keywords (for user search matching).",
+         "items": {
+            "type": "string"
+         }
+      },
+      "selectors": {
+         "type": "array",
+         "description": "Optional list of selectors.",
          "items": {
             "type": "string"
          }
@@ -139,9 +152,24 @@
             }
          }
       },
+      "data": {
+         "description": "Reserved to component derived from a driver component."
+      },
+      "resources": {
+         "type": "object",
+         "description": "Resources catalog with undefined interface.",
+         "additionalProperties": {
+            "type": [
+               "string",
+               "object"
+            ],
+            "description": "Can be a path, module reference, or full object configuration.",
+            "additionalProperties": true
+         }
+      },
       "services": {
          "type": "object",
-         "description": "Defines service entrypoints for implementation or execution.",
+         "description": "Resources providing specific services interfaces.",
          "additionalProperties": {
             "type": [
                "string",

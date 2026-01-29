@@ -2,9 +2,9 @@ import Fs from "node:fs"
 import Path from "node:path"
 import * as AWS from "@aws-sdk/client-s3"
 import MIME from "mime"
-import { StorageFiles } from "../model/storage.js"
-import { build_application } from "../builder/build-application.js"
-import { Workspace } from "../model/workspace.js"
+import { StorageFiles } from "../model/storage.ts"
+import { build_application } from "../builder/build-application.ts"
+import { Workspace } from "../model/workspace.ts"
 
 export type WebFile = {
    key: string

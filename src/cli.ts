@@ -1,13 +1,12 @@
 #!/usr/bin/env node
-import "source-map-support/register.js"
 import Process from "node:process"
 import Yargs from "yargs"
 import { hideBin } from 'yargs/helpers'
-import { command_run } from "./commands/run.js"
-import { command_init } from "./commands/init.js"
-import { command_make } from "./commands/make.js"
-import { command_serve } from "./commands/serve.js"
-import { command_publish } from "./commands/publish.js"
+import { command_run } from "./commands/run.ts"
+import { command_init } from "./commands/init.ts"
+import { command_make } from "./commands/make.ts"
+import { command_serve } from "./commands/serve.ts"
+import { command_publish } from "./commands/publish.ts"
 
 function command_fail() {
    return {

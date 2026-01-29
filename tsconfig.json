@@ -2,14 +2,24 @@
   "compilerOptions": {
     "target": "es2022",
     "skipLibCheck": true,
-    "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
+    "rewriteRelativeImportExtensions": true,
+    "allowArbitraryExtensions": false,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
     "strict": false,
     "module": "ES2022",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "noUnusedLocals": false,
+    "noImplicitThis": true,
     "sourceMap": true,
-    "outDir": "esm"
+    "outDir": "esm",
+    "jsx": "react-jsx",
+    "lib": [
+      "es2022",
+      "dom",
+      "dom.iterable"
+    ]
   },
   "include": [
     "src"

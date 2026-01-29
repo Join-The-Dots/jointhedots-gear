@@ -1,10 +1,12 @@
-import Express from 'express'
-import { matchComponentSelection, AppEntry, ChromeAppDescriptor, ChromeAppManifest, } from "../model/workspace.js"
-import { StorageFiles } from "../model/storage.js"
-import { BuildTarget, BuildTask, ComponentCatalogsTask, resolve_entry_path, WebviewTask } from "./build-target.js"
+import { Library, matchComponentSelection, type AppEntry, type ChromeAppDescriptor, type ChromeAppManifest, type WebviewEntry } from "../model/workspace.ts"
+import { StorageFiles } from "../model/storage.ts"
+import { BuildTarget, BuildTask, ComponentCatalogsTask } from "./build-target.ts"
+import type { WebAppManifest } from 'web-app-manifest'
 import Path from "node:path"
+import Fs from "node:fs"
 import Sharp from "sharp"
-import { WebAppManifest } from 'web-app-manifest'
+import MIME from 'mime'
+import { build_app_composable_host } from "./build-app-host.ts"
 
 export type BuildApplicationOptions = {
    app: AppEntry
@@ -13,10 +15,32 @@ export type BuildApplicationOptions = {
    devmode?: boolean
    watch?: boolean
    clean?: boolean
-   port?: number
+   devserver?: string
 }
 
-export function create_application_target(opts: {
+function collect_app_libraries(app: AppEntry): Library[] {
+   const libs: Library[] = [app.library]
+   function collect_library_deps(lib: Library) {
+      const ws = lib.workspace
+      const deps = {
+         ...lib.descriptor.dependencies,
+         ...lib.descriptor.devDependencies,
+         ...lib.descriptor.peerDependencies,
+      }
+      for (const depId in deps) {
+         const lib = ws.get_library(depId)
+         if (lib && !libs.includes(lib)) {
+            libs.push(lib)
+         }
+      }
+   }
+   for (let i = 0; i < libs.length; i++) {
+      collect_library_deps(libs[i])
+   }
+   return libs
+}
+
+export function create_application_monolith_target(opts: {
    app: AppEntry
    storage: StorageFiles
    version: string
@@ -27,8 +51,10 @@ export function create_application_target(opts: {
 }): BuildTarget {
    const { app, version } = opts
    const { type, name, webviews, modules, assets, components } = app.descriptor
-   const ws = app.library.workspace
+   const lib = app.library
+   const ws = lib.workspace
    const target = new BuildTarget(name, opts.storage, ws, opts.devmode == true, opts.watch == true, opts.clean == true)
+   const libs = collect_app_libraries(app)
 
    // Generate hotreload assets
    const html_injects: string[] = []
@@ -56,30 +82,34 @@ export function create_application_target(opts: {
 
    // Add application webviews
    for (const name in webviews) {
-      const { title, entry, favicon } = webviews[name]
+      const { title, favicon, entry } = webviews[name]
+      const entry_name = lib.make_file_id("webview", name)
+      const entry_path = app.library.resolve_entry_path(entry, app.baseDir)
+      target.esmodules.add_entry(entry_name, entry_path)
+
       const webview = {
          ...webviews[name],
-         entry: resolve_entry_path(app.library, entry, app.baseDir),
-         favicon: favicon ? resolve_entry_path(app.library, favicon, app.baseDir) : null,
+         entry: `./${entry_name}.js`,
+         favicon: favicon ? app.library.resolve_entry_path(favicon, app.baseDir) : null,
       }
-      target.esmodules.add_entry(name, webview.entry)
       target.tasks.push(new WebviewTask(target, name, title || name, webview, html_injects))
+
       if (opts.devserver) {
-         console.log(`+ webview '${app.library.name}': ${name} : ${opts.devserver}/${name}`)
+         target.log.info(`+ webview '${app.library.name}': ${name} : ${opts.devserver}/${name}`)
       }
    }
 
    // Add application modules
    for (const name in modules) {
-      const entry = resolve_entry_path(app.library, modules[name], app.baseDir)
       if (name.endsWith(".js")) {
-         target.esmodules.add_entry(name.slice(0, -3), entry)
+         const entry_name = lib.make_file_id("module", name.slice(0, -3))
+         target.esmodules.add_entry_typescript(`export * from "./${entry_name}.js"`, name.slice(0, -3))
          if (opts.devserver) {
-            console.log(`+ module '${app.library.name}': ${name} : ${opts.devserver}/${name}`)
+            target.log.info(`+ module '${app.library.name}': ${name} : ${opts.devserver}/${name}`)
          }
       }
       else {
-         target.error(`Invalid module name '${name}' in ${name}`)
+         target.log.error(`Invalid module name '${name}' in ${name}`)
       }
    }
 
@@ -94,16 +124,16 @@ export function create_application_target(opts: {
    target.tasks.push(new ComponentCatalogsTask(target))
 
    // Add workspace components
-   for (const lib of ws.libraries) {
+   for (const lib of libs) {
       for (const [path, desc] of lib.components) {
-         if (!matchComponentSelection (components, desc.selectors)) continue
+         if (!matchComponentSelection(components, desc.selectors)) continue
          const baseDir = Path.dirname(path)
          target.add_component(desc, baseDir, lib)
       }
    }
 
    // Add workspace assets
-   for (const lib of ws.libraries) {
+   for (const lib of libs) {
       for (const [path, desc] of lib.declarations) {
          if (!matchComponentSelection(components, desc.selectors)) continue
          if (desc.assets) {
@@ -115,54 +145,68 @@ export function create_application_target(opts: {
       }
    }
 
+   // Register esbuild plugin for peers dependencies deduplication
+   target.esmodules.plugins.push(createPeersDependenciesDeduplicationPlugin(target, app, libs))
    return target
 }
 
-export async function build_application(opts: BuildApplicationOptions): Promise<void> {
-   const { app, storage } = opts
+export async function build_app_monolith(opts: BuildApplicationOptions): Promise<void> {
+   const { app } = opts
+   opts.storage.clean()
 
-   const target = create_application_target({
+   const target = create_application_monolith_target({
       app,
       storage: opts.storage,
       version: opts.version,
       devmode: opts.devmode,
-      devserver: opts.port && `http://localhost:${opts.port}`,
-      watch: opts.port ? true : opts.watch,
+      devserver: opts.devserver,
+      watch: opts.devserver ? true : opts.watch,
       clean: opts.clean,
    })
 
-   console.log(`> Build app: ${target.name}`)
-   if (opts.port) {
-      await Promise.all([
-         target.build(),
-         serve(opts.port, storage)
-      ])
+   target.log.info(`Build app: ${target.name}`)
+   return target.build()
+}
+
+export async function build_application(opts: BuildApplicationOptions): Promise<void> {
+   if (opts.app.descriptor.type === "composable") {
+      return build_app_composable_host(opts)
    }
    else {
-      await target.build()
+      return build_app_monolith(opts)
    }
 }
 
-async function serve(port: number, storage: StorageFiles) {
-   const app = Express()
-   app.use((req, res, next) => {
-      res.setHeader("Access-Control-Allow-Origin", "*")
-      res.setHeader('Access-Control-Allow-Methods', '*')
-      res.setHeader("Access-Control-Allow-Headers", "*")
-      next()
-   })
-   app.get('/esbuild', storage.on_changes.route())
-   app.get('*', storage.route())
-   app.listen(port, () => {
-      console.log(`Server is running at http://localhost:${port}`)
-   })
-   return new Promise((resolve) => {
-      process.on('SIGQUIT', () => resolve(null))
-   })
+export class WebviewTask extends BuildTask {
+   constructor(
+      target: BuildTarget,
+      readonly name: string,
+      readonly title: string,
+      readonly desc: WebviewEntry,
+      readonly html_injects: string[],
+   ) {
+      super(target)
+   }
+   async execute() {
+      const { name, title, desc, html_injects } = this
+      const tx = this.target.edit()
+      tx.commitFile(name, `<!DOCTYPE html>
+         <html>
+             <head>
+                 <title>${title}</title>
+                 <meta charset="utf-8">
+                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                 ${desc.favicon ? `<link rel="icon" type="${MIME.getType(desc.favicon)}" href="${desc.favicon}">` : ""}
+                 <script defer type="module" src="${desc.entry}"></script>
+                 ${html_injects.join('\n           ')}
+             </head>
+             <body>
+             </body>
+         </html>`)
+   }
 }
 
-
-class ChromePackageTask extends BuildTask {
+export class ChromePackageTask extends BuildTask {
    constructor(
       target: BuildTarget,
       readonly app: AppEntry,
@@ -171,15 +215,15 @@ class ChromePackageTask extends BuildTask {
       super(target)
    }
    async execute() {
-      const { target, app } = this
-      const { storage } = target
+      const { app } = this
+      const tx = this.target.edit()
       const desc = app.descriptor as ChromeAppDescriptor
       const infos: ChromeAppManifest = desc.manifest || {} as any
       const icon = Sharp(Path.resolve(app.baseDir, desc.icon))
 
       // Create default favorite icon
       const favicon_data = await createIcon(icon, 64, "png")
-      const favicon_url = await storage.commitContent(favicon_data, "image/png")
+      const favicon_url = await tx.commitContent(favicon_data, "image/png")
 
       // Create manifest
       const manifest: ChromeAppManifest = {
@@ -197,20 +241,20 @@ class ChromePackageTask extends BuildTask {
       }
 
       // Write manifest
-      storage.commitFile("manifest.json", JSON.stringify(manifest, null, 2))
+      tx.commitFile("manifest.json", JSON.stringify(manifest, null, 2))
    }
    async createIcons(base: Sharp.Sharp): Promise<ChromeAppManifest["icons"]> {
-      const { storage } = this.target
+      const tx = this.target.edit()
       const icons = {}
       for (const size of [16, 32, 64, 128, 256]) {
          const img_data = await createIcon(base, size, "png")
-         icons[size] = storage.commitContent(img_data, "image/png")
+         icons[size] = tx.commitContent(img_data, "image/png")
       }
       return icons
    }
 }
 
-class PWAPackageTask extends BuildTask {
+export class PWAPackageTask extends BuildTask {
    constructor(
       target: BuildTarget,
       readonly app: AppEntry,
@@ -218,19 +262,27 @@ class PWAPackageTask extends BuildTask {
       super(target)
    }
    async execute() {
-      const { target, app } = this
-      const { storage } = target
+      const { app } = this
+      const tx = this.target.edit()
       const desc = app.descriptor
 
       // Create webapp icons
-      const base_icon = Sharp(Path.resolve(app.baseDir, desc.icon))
-      const icons = await this.createIcons(base_icon)
+      let icons: WebAppManifest["icons"] = undefined
+      if (desc.icon) {
+         try {
+            const base_icon = Sharp(Path.resolve(app.baseDir, desc.icon))
+            icons = await this.createIcons(base_icon)
 
-      // Create default favorite icon
-      const favicon_data = await createIcon(base_icon, 64, "webp")
-      storage.commitFile("favicon.webp", favicon_data, "image/webp")
+            // Create default favorite icon
+            const favicon_data = await createIcon(base_icon, 64, "webp")
+            tx.commitFile("favicon.webp", favicon_data, "image/webp")
+         }
+         catch (e) {
+            this.log.error(`${app.path} has invalid icons: ${e.message}`)
+         }
+      }
 
-      storage.commitFile(`manifest.json`, JSON.stringify({
+      tx.commitFile(`manifest.json`, JSON.stringify({
          "short_name": desc.name,
          "name": desc.title || desc.name,
          "icons": icons,
@@ -246,11 +298,11 @@ class PWAPackageTask extends BuildTask {
       }, null, 2))
    }
    async createIcons(base: Sharp.Sharp): Promise<WebAppManifest["icons"]> {
-      const { storage } = this.target
+      const tx = this.target.edit()
       const icons = []
       for (const size of [32, 64, 128, 256, 512]) {
          const img_data = await createIcon(base, size, "webp")
-         const img_url = storage.commitContent(img_data, "image/webp")
+         const img_url = tx.commitContent(img_data, "image/webp")
          icons.push({
             "src": img_url,
             "sizes": `${size}x${size}`,
@@ -266,4 +318,123 @@ function createIcon(base: Sharp.Sharp, size: number, format: "webp" | "png"): Pr
       .resize(size, size, { fit: 'cover', position: 'center', })
       .toFormat(format, { quality: 80 })
       .toBuffer()
+}
+
+/**
+ * Creates an esbuild plugin that deduplicates peer dependencies across workspace libraries.
+ * 
+ * When multiple libraries declare the same peer dependency, this plugin ensures they all
+ * resolve to the same version from the application's node_modules, preventing duplicate
+ * bundles of packages like React, React DOM, etc.
+ */
+function createPeersDependenciesDeduplicationPlugin(target: BuildTarget, app: AppEntry, libs: Library[]): import('esbuild').Plugin {
+   // Collect all peer dependencies from all workspace libraries
+   const peerDependencies = new Map<string, string>()
+
+   // Add app's own peer dependencies first (highest priority)
+   const appPeers = app.library.descriptor.peerDependencies || {}
+   for (const [name, version] of Object.entries(appPeers)) {
+      peerDependencies.set(name, version as string)
+   }
+
+   // Add peer dependencies from all dependent libraries
+   for (const lib of libs) {
+      const libPeers = lib.descriptor.peerDependencies || {}
+      for (const [name, version] of Object.entries(libPeers)) {
+         // Only add if not already defined (app takes priority)
+         if (!peerDependencies.has(name)) {
+            peerDependencies.set(name, version as string)
+         }
+      }
+   }
+
+   // Find the app's node_modules path (where app dependencies are installed)
+   const appNodeModules = Path.join(app.library.path, 'node_modules')
+
+   // Find the root node_modules path from workspace search directories
+   const ws = app.library.workspace
+   const rootNodeModules = ws.search_directories[0] || Path.join(ws.path, 'node_modules')
+
+   // Determine which node_modules to use for resolution
+   // Prefer app's node_modules if it exists, otherwise use root
+   const targetNodeModules = Fs.existsSync(appNodeModules) ? appNodeModules : rootNodeModules
+
+   // Cache resolved paths to avoid re-resolving the same package multiple times
+   const resolvedPaths = new Map<string, string>()
+
+   // Log what we're deduplicating
+   target.log.trace(`[deduplicate-peers] Deduplicating ${peerDependencies.size} peer dependencies from ${targetNodeModules}:`)
+   for (const [name] of peerDependencies) {
+      target.log.trace(`  - ${name}`)
+   }
+
+   return {
+      name: "deduplicate-peers-dependencies",
+      setup(build) {
+         // Intercept resolution of peer dependencies
+         build.onResolve({ filter: /.*/ }, async (args) => {
+            // Avoid infinite recursion - skip if already processed by this plugin
+            if (args.pluginData?.deduplicatedPeer) {
+               return null
+            }
+
+            // Skip if not a bare module specifier (relative or absolute paths)
+            if (args.path.startsWith('.') || args.path.startsWith('/') || Path.isAbsolute(args.path)) {
+               return null
+            }
+
+            // Extract the package name (handle scoped packages like @scope/package)
+            const packageName = getPackageName(args.path)
+
+            // Check if this is a peer dependency we're tracking
+            if (!peerDependencies.has(packageName)) {
+               return null
+            }
+
+            // Check cache first
+            const cacheKey = args.path
+            if (resolvedPaths.has(cacheKey)) {
+               return { path: resolvedPaths.get(cacheKey), namespace: 'file' }
+            }
+
+            // Always resolve peer dependencies from the target node_modules
+            // This ensures all imports of the same package resolve to the same instance
+            const result = await build.resolve(args.path, {
+               kind: args.kind,
+               resolveDir: targetNodeModules,
+               importer: args.importer,
+               namespace: args.namespace,
+               pluginData: { ...args.pluginData, deduplicatedPeer: true },
+            })
+
+            if (!result.errors || result.errors.length === 0) {
+               // Cache the resolved path
+               resolvedPaths.set(cacheKey, result.path)
+               target.log.trace(`[deduplicate-peers] ${args.path} -> ${result.path}`)
+               return result
+            }
+
+            return null
+         })
+      }
+   }
+}
+
+/**
+ * Extracts the package name from an import path.
+ * Handles both regular packages (e.g., "react") and scoped packages (e.g., "@scope/package").
+ */
+function getPackageName(importPath: string): string {
+   if (importPath.startsWith('@')) {
+      // Scoped package: @scope/package or @scope/package/subpath
+      const parts = importPath.split('/')
+      if (parts.length >= 2) {
+         return `${parts[0]}/${parts[1]}`
+      }
+      return importPath
+   } else {
+      // Regular package: package or package/subpath
+      const slashIndex = importPath.indexOf('/')
+      return slashIndex === -1 ? importPath : importPath.substring(0, slashIndex)
+   }
 }

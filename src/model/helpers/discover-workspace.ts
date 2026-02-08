@@ -1,26 +1,56 @@
 import Fs from "node:fs"
 import Fsp from "node:fs/promises"
-import Path from "node:path"
 import { readJsonFile } from "../storage.ts"
-import { checkComponentManifest, type ComponentCatalogsDescriptor, type ComponentManifest } from "../component.ts"
+import { checkComponentManifest, type BundleManifest, type ComponentManifest } from "../component.ts"
 import { makeNormalizedName, NameStyle } from "../../utils/normalized-name.ts"
 import { create_manifests } from "./create-manifests.ts"
-import { Bundle, Library, Workspace, type AppDescriptor, type DeclarationDescriptor, type PackageBundleDescriptor, type PackageDescriptor } from "../workspace.ts"
+import { Bundle, Library, Workspace, type AppDescriptor, type DeclarationDescriptor, type PackageDescriptor } from "../workspace.ts"
+import { make_canonical_path, make_normalized_dirname, make_normalized_path, make_relative_path } from "../../utils/file.ts"
 
 const exclude_dirs = ["node_modules"]
 
+function setup_library_bundle(lib: Library, bundle_desc?: any) {
+   const manif = make_library_bundle_manifest(lib, bundle_desc)
+   const ws = lib.workspace
+   let bun = ws.get_bundle(manif.$id)
+   if (!bun) {
+      bun = new Bundle(manif, lib.path, ws, lib)
+      lib.bundle = bun
+      ws.bundles.push(bun)
+      lib.log.info(`+ 📦 bundle: ${bun.id}`)
+      return bun
+   }
+   else {
+      throw new Error(`Library '${lib.get_id()}' is associate to a bundle '${bun.id}' that is already associated`)
+   }
+}
+
 async function discover_component(lib: Library, fpath: string) {
+   let bundle = lib.bundle
+   if (!bundle) {
+      bundle = setup_library_bundle(lib)
+   }
+   if (bundle.components.has(fpath)) {
+      return true
+   }
    try {
       const data = await Fsp.readFile(fpath)
       const desc = JSON.parse(data.toString()) as ComponentManifest
-      const err = checkComponentManifest(desc, fpath)
-      if (err) throw err
-      lib.components.set(fpath, desc)
-      lib.log.info(`+ component '${lib.name}': ${desc.$id}`)
+      if (desc.type !== "bundle") {
+         const err = checkComponentManifest(desc, fpath)
+         if (err) throw err
+         bundle.components.set(fpath, desc)
+         lib.log.info(`+ 🧩 component: ${desc.$id} ${desc.type ? `(${desc.type})` : ""}`)
+         return true
+      }
+      else if (bundle.path !== make_normalized_dirname(fpath)) {
+         lib.log.error(`invalid bundle component at ${fpath}`)
+      }
    }
    catch (e) {
-      lib.log.error(`! invalid component at ${fpath}: ${e?.message}`)
+      lib.log.error(`invalid component at ${fpath}: ${e?.message}`)
    }
+   return false
 }
 
 async function discover_declaration(lib: Library, fpath: string) {
@@ -28,10 +58,10 @@ async function discover_declaration(lib: Library, fpath: string) {
       const data = await Fsp.readFile(fpath)
       const desc = JSON.parse(data.toString()) as DeclarationDescriptor
       lib.declarations.set(fpath, desc)
-      lib.log.info(`+ declaration '${lib.name}': ${Path.relative(lib.path, fpath)}`)
+      lib.log.info(`+ 🔧 declaration: ${make_relative_path(lib.path, fpath)}`)
    }
    catch (e) {
-      lib.log.error(`! invalid declaration at ${fpath}: ${e?.message}`)
+      lib.log.error(`invalid declaration at ${fpath}: ${e?.message}`)
    }
 }
 
@@ -40,10 +70,10 @@ async function discover_application(lib: Library, fpath: string) {
       const data = await Fsp.readFile(fpath)
       const desc = JSON.parse(data.toString()) as AppDescriptor
       lib.applications.set(fpath, desc)
-      lib.log.info(`+ application '${lib.name}': ${Path.relative(lib.path, fpath)}`)
+      lib.log.info(`+ 🚀 application: ${make_relative_path(lib.path, fpath)}`)
    }
    catch (e) {
-      lib.log.error(`! invalid declaration at ${fpath}: ${e?.message}`)
+      lib.log.error(`invalid declaration at ${fpath}: ${e?.message}`)
    }
 }
 
@@ -84,70 +114,76 @@ async function discover_library_components(lib: Library, path: string, subdir: b
       }
    }
 
-   // Analyze libary deployment manifest
-   const manifest_path = `${path}/components.manifest.json`
+   // Analyze libary deployment manifest 
+   const manifest_path = `${path}/bundle.manifest.json`
    if (Fs.existsSync(manifest_path)) {
-      const manifest = JSON.parse(Fs.readFileSync(manifest_path).toString()) as ComponentCatalogsDescriptor
-      for (const id in manifest.components) {
-         const fpath = Path.join(path, manifest.components[id])
+      const manifest = JSON.parse(Fs.readFileSync(manifest_path).toString()) as BundleManifest
+      for (const pub of manifest.data.components) {
+         const fpath = path + "/" + pub.id
          await discover_component(lib, fpath)
       }
    }
 }
 
-function resolve_canonical_path(ws: Workspace, targetPath: string): string {
-   targetPath = Path.resolve(ws.path, targetPath)
-   try {
-      const stats = Fs.lstatSync(targetPath)
-      if (stats.isSymbolicLink()) {
-         return Path.resolve(Fs.readlinkSync(targetPath))
+function make_library_bundle_manifest(lib: Library, file_desc?: Partial<BundleManifest>): BundleManifest {
+   let $id = file_desc?.$id
+   if ($id) {
+      $id  = makeNormalizedName($id, NameStyle.OBJECT)
+      if ($id  !== file_desc.$id) {
+         lib.log.warn(`Bundle '${file_desc.$id}' is normalized into '${$id}'`)
       }
    }
-   catch (err) { }
-   return targetPath
-}
+   else {
+      $id = makeNormalizedName(lib.name, NameStyle.OBJECT)
+      lib.log.info(`Bundle '${$id}' named from library '${lib.name}'`)
+   }
 
-function make_library_bundle_descriptor(lib: Library, file_desc?: Partial<PackageBundleDescriptor>): PackageBundleDescriptor {
-   const desc: PackageBundleDescriptor = {
-      id: lib.name,
+   const data: BundleManifest["data"] = {
       alias: lib.name,
       package: lib.get_id(),
       namespaces: [],
       dependencies: [],
-      distribueds: {},
+      redistribueds: {},
    }
 
-   if (file_desc) {
-      desc.id = file_desc.id ?? desc.id
-      desc.alias = file_desc.alias ?? desc.alias
-      if (file_desc.distribueds) {
-         const { distribueds } = file_desc
-         if (Array.isArray(distribueds)) distribueds.forEach(dist => desc.distribueds[dist] = "*")
-         else Object.assign(desc.distribueds, distribueds)
+   if (file_desc?.data) {
+      data.alias = file_desc.data.alias ?? data.alias
+      if (file_desc.data.redistribueds) {
+         const distribueds = file_desc.data.redistribueds
+         if (Array.isArray(distribueds)) distribueds.forEach(dist => data.redistribueds[dist] = "*")
+         else Object.assign(data.redistribueds, distribueds)
       }
-      if (file_desc.namespaces) {
-         desc.namespaces = file_desc.namespaces ?? []
+      if (file_desc.data.namespaces) {
+         data.namespaces = file_desc.data.namespaces
       }
-      if (file_desc.dependencies) {
-         desc.dependencies = file_desc?.dependencies
+      if (file_desc.data.dependencies) {
+         data.dependencies = file_desc.data.dependencies
       }
    }
 
-   const normed_id = makeNormalizedName(desc.id, NameStyle.OBJECT)
-   if (normed_id !== desc.id) {
-      lib.log.warn(`Bundle '${desc.id}' is normalized into '${normed_id}'`)
-      desc.id = normed_id
+   const manifest: BundleManifest = {
+      $id,
+      type: file_desc?.type,
+      name: file_desc?.name ?? lib.name,
+      icon: file_desc?.icon,
+      title: file_desc?.title,
+      tags: file_desc?.tags,
+      keywords: file_desc?.keywords,
+      description: file_desc?.description ?? lib.descriptor?.description,
+      selectors: file_desc?.selectors,
+      data,
    }
 
-   return desc
+   return manifest
 }
 
 async function discover_library(ws: Workspace, location: string) {
-   const lib_path = resolve_canonical_path(ws, location)
+   const lib_path = make_canonical_path(ws.path, location)
    const lib_not_exists = ws.libraries.reduce((r, lib) => r && lib.path !== lib_path, true)
    if (lib_not_exists) {
-      const lib_desc = await readJsonFile(Path.join(lib_path, "/package.json")) as PackageDescriptor
-      const bundle_desc = await readJsonFile(Path.join(lib_path, "/jointhedots.json"))
+      const lib_desc = await readJsonFile(lib_path + "/package.json") as PackageDescriptor
+      const bundle_path = lib_path + "/bundle.component.json"
+      const bundle_desc = await readJsonFile(bundle_path)
       if (bundle_desc || lib_desc?.componentsContainer) {
          const other = ws.get_library(lib_desc.name)
          if (other) {
@@ -164,17 +200,7 @@ async function discover_library(ws: Workspace, location: string) {
          ws.libraries.push(lib)
 
          if (bundle_desc) {
-            const bdesc = make_library_bundle_descriptor(lib, bundle_desc)
-            let bun = ws.get_bundle(bdesc.id)
-            if (!bun) {
-               bun = new Bundle(bdesc, ws)
-               lib.bundle = bun
-               bun.source = lib
-               ws.bundles.push(bun)
-            }
-            else {
-               throw new Error(`Library '${lib.get_id()}' is associate to a bundle '${bun.id}' that is already associated`)
-            }
+            setup_library_bundle(lib, bundle_desc)
          }
 
          const lib_search_path = lib_path + "/node_modules"
@@ -182,7 +208,7 @@ async function discover_library(ws: Workspace, location: string) {
             lib.search_directories.push(lib_search_path)
          }
 
-         await discover_library_components(lib, Path.resolve(lib_path))
+         await discover_library_components(lib, lib_path)
       }
 
    }
@@ -194,19 +220,25 @@ async function discover_workspace_libraries(ws: Workspace) {
       await discover_library(ws, dir)
       for (const entry of Fs.readdirSync(dir, { withFileTypes: true })) {
          if (entry.name === "node_modules") continue
-         const fullPath = Path.join(dir, entry.name)
+         const fullPath = dir + "/" + entry.name
          if (entry.isDirectory()) {
             await walk(fullPath)
          }
       }
    }
 
-   await walk(Path.resolve(ws.path))
+   await walk(ws.path)
+}
+
+function show_constants(ws: Workspace) {
+   for (const name in ws.constants) {
+      ws.log.info(`+ 🔖 ${name} = ${ws.constants[name]}`)
+   }
 }
 
 export async function discover_workspace(ws: Workspace): Promise<Workspace> {
    let package_lock: any = null
-   for (let path = Path.resolve(ws.path); ;) {
+   for (let path = ws.path; ;) {
       const package_json = await readJsonFile(path + "/package.json")
       if (package_json) {
          const search_path = path + "/node_modules"
@@ -224,7 +256,7 @@ export async function discover_workspace(ws: Workspace): Promise<Workspace> {
       if (!package_lock && Fs.existsSync(package_lock_path)) {
          package_lock = await readJsonFile(package_lock_path)
       }
-      const next_path = Path.dirname(path)
+      const next_path = make_normalized_dirname(path)
       if (next_path === path) break
       path = next_path
    }
@@ -244,5 +276,6 @@ export async function discover_workspace(ws: Workspace): Promise<Workspace> {
       }
    }
 
+   show_constants(ws)
    return ws
 }

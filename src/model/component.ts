@@ -25,7 +25,7 @@ export type ComponentSpec = {
    [customSpec: string]: any
 }
 
-export type ComponentManifest = {
+export type ComponentManifest<Data extends any = unknown> = {
    $id: string
    type?: string
    name?: string
@@ -36,39 +36,63 @@ export type ComponentManifest = {
    description?: string
    selectors?: string[]
    specs?: Record<string, ComponentSpec>
-   data?: any // Reserved to component derived from a driver component
+   data?: Data // Reserved to component derived from a driver component
    resources?: Record<string, ResourceEntry> // Resources catalog with undefined interface
    services?: Record<string, ResourceEntry> // Resources providing specific services interfaces
 }
 
-export type BundleManifest = ComponentManifest & {
-   type: "bundle"
-   baseline: string
-   namespaces?: string[]
-   dependencies?: BundleID[]
-   exports: { [id: string]: string }
-   components: { [id: ComponentID]: ComponentPublication }
-   catalogs: { [id: ComponentCatalogID]: string }
+/** Configuration for a distributed package */
+export interface DistributedConfig {
+   /** Version specifier (e.g., "*", "^18.0.0") */
+   version?: string
+   /** Interop type: 'esm' | 'cjs-default' | 'cjs-named' */
+   interop?: 'esm' | 'cjs-default' | 'cjs-named'
+   /** List of named exports to re-export (required for cjs-named interop) */
+   exports?: string[]
 }
+
+export type BundleManifest = ComponentManifest<{
+   // Bundle alias (name that can help to connect it to library name)
+   alias?: string
+   // Bundle library/package origin
+   package?: string
+   // Bundle baseline (major version)
+   baseline?: string
+
+   // Bundle namespace (allow to enrich an public components namespace)
+   namespaces?: string[]
+   // Bundle dependencies
+   dependencies?: string[]
+
+   // Package redistribued by this bundle (force dependents bundle to use these package distribuable instead of bundling them)
+   // > Used for shared library, ex: react, react-dom / or huge one, ex: @material/mui, ...
+   redistribueds?: string[] | {
+      [packageName: string]: string | DistributedConfig
+   }
+
+   // Bundle exports content
+   exports?: { [id: string]: string }
+
+   // Bundle components catalog
+   components?: ComponentPublication[]
+}>
 
 export interface ComponentPublication {
-   component_id: ComponentID
-   type?: string
-   icon: string
+
+   // Identity
+   id: ComponentID // Component id
+   ref?: string // Component manifest reference
+   type?: string // Component manifest type
+
+   // Presentation
    title: string
-   services?: string[]
+   icon?: string
    description?: string
+
+   // Features
+   services?: string[]
    keywords?: string[]
    tags?: string[]
-}
-
-export type ComponentCatalogID = string // Identifier of catalog
-
-export type ComponentCatalogsDescriptor = {
-   name: string
-   baseline: string
-   components: { [id: ComponentID]: string }
-   catalogs: { [id: ComponentCatalogID]: string }
 }
 
 export function checkComponentManifest(manif: ComponentManifest, path: string): Error {
@@ -80,14 +104,13 @@ export function checkComponentManifest(manif: ComponentManifest, path: string): 
    }
    return null
 }
-
+ 
 export function makeComponentPublication(manif: ComponentManifest): ComponentPublication {
-   const id = manif.$id
    return {
-      component_id: id,
+      id: manif.$id,
       type: manif.type,
       icon: manif.icon,
-      title: manif.title || manif.name || id,
+      title: manif.title || manif.name || manif.$id,
       services: manif.services ? Object.keys(manif.services) : [],
       description: manif.description || "",
       keywords: manif.keywords,

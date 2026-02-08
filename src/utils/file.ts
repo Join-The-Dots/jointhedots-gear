@@ -83,14 +83,14 @@ export const directory = {
     try {
       if (recursive) {
 
-        function *walkSync(dir: string) {
+        function* walkSync(dir: string) {
           const files = fs.readdirSync(dir)
-      
+
           for (const file of files) {
             const pathToFile = Path.join(dir, file)
             const isDirectory = fs.statSync(pathToFile).isDirectory()
             if (isDirectory) {
-              yield *walkSync(pathToFile)
+              yield* walkSync(pathToFile)
             } else {
               yield pathToFile
             }
@@ -103,7 +103,7 @@ export const directory = {
         }
         return _Result
       }
-      else return fs.readdirSync(path) || [] 
+      else return fs.readdirSync(path) || []
     }
     catch (e) { return [] }
   },
@@ -125,9 +125,9 @@ export const directory = {
   make(path: string) {
     if (path && !fs.existsSync(path)) {
       fs.mkdirSync(path, { recursive: true })
-    } 
+    }
   },
-  remove(path: string) {
+  remove(path: string, onlyInner?: boolean) {
     if (fs.existsSync(path) && fs.lstatSync(path).isDirectory()) {
       fs.readdirSync(path).forEach(function (entry) {
         var entry_path = Path.join(path, entry)
@@ -139,17 +139,43 @@ export const directory = {
           catch (e) { return }
         }
       })
-      fs.rmdirSync(path)
+      if (!onlyInner) {
+        fs.rmdirSync(path)
+      }
     }
   },
   clean(path: string) {
-    directory.remove(path)
-    directory.make(path)
+    if (directory.exists(path)) {
+      directory.remove(path, true)
+    }
+    else {
+      directory.make(path)
+    }
   },
 }
 
-export function make_relative_path(baseDir: string, ...path: string[]) {
-    const relpath = Path.relative(baseDir, Path.resolve(...path)).replace(/\\/g, "/")
-    if (relpath.startsWith(".")) return relpath
-    else return "./" + relpath
+export function make_relative_path(baseDir: string, ...path: string[]): string {
+  const relpath = Path.relative(baseDir, Path.resolve(...path)).replace(/\\/g, "/")
+  if (relpath.startsWith(".")) return relpath
+  else return "./" + relpath
+}
+
+export function make_normalized_path(baseDir: string, ...path: string[]): string {
+  return Path.resolve(baseDir, ...path).replace(/\\/g, "/")
+}
+
+export function make_normalized_dirname(baseDir: string, ...path: string[]): string {
+  return Path.dirname(Path.resolve(baseDir, ...path)).replace(/\\/g, "/")
+}
+
+export function make_canonical_path(baseDir: string, ...path: string[]): string {
+  let targetPath = Path.resolve(baseDir, ...path)
+  try {
+    const stats = fs.lstatSync(targetPath)
+    if (stats.isSymbolicLink()) {
+      targetPath = fs.readlinkSync(targetPath)
+    }
+  }
+  catch (err) { }
+  return make_normalized_path(targetPath)
 }

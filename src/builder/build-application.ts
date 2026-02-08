@@ -1,6 +1,6 @@
 import { Library, matchComponentSelection, type AppEntry, type ChromeAppDescriptor, type ChromeAppManifest, type WebviewEntry } from "../model/workspace.ts"
 import { StorageFiles } from "../model/storage.ts"
-import { BuildTarget, BuildTask, ComponentCatalogsTask } from "./build-target.ts"
+import { BuildTarget, BuildTask, BundleManifestTask } from "./build-target.ts"
 import type { WebAppManifest } from 'web-app-manifest'
 import Path from "node:path"
 import Fs from "node:fs"
@@ -95,7 +95,7 @@ export function create_application_monolith_target(opts: {
       target.tasks.push(new WebviewTask(target, name, title || name, webview, html_injects))
 
       if (opts.devserver) {
-         target.log.info(`+ webview '${app.library.name}': ${name} : ${opts.devserver}/${name}`)
+         target.log.info(`+ 🌐 webview: ${name} : ${opts.devserver}/${name}`)
       }
    }
 
@@ -109,7 +109,7 @@ export function create_application_monolith_target(opts: {
          const entry_name = name.slice(0, -3)
          target.esmodules.add_entry(entry_name, entry_path)
          if (opts.devserver) {
-            target.log.info(`+ module '${app.library.name}': ${name} : ${opts.devserver}/${name}`)
+            target.log.info(`+ 🔌 module: ${name} : ${opts.devserver}/${name}`)
          }
       }
       else {
@@ -124,16 +124,24 @@ export function create_application_monolith_target(opts: {
       }
    }
 
-   // Add components catalog
-   target.tasks.push(new ComponentCatalogsTask(target))
+   // Add bundle content
+   const { bundle } = lib
+   if (bundle) {
 
-   // Add workspace components
-   for (const lib of libs) {
-      for (const [path, desc] of lib.components) {
-         if (!matchComponentSelection(components, desc.selectors)) continue
-         const baseDir = Path.dirname(path)
-         target.add_component(desc, baseDir, lib)
+      // Add bundle manifest
+      target.tasks.push(new BundleManifestTask(target, bundle))
+
+      // Add workspace components
+      for (const lib of libs) {
+         if (lib.bundle) {
+            for (const [path, desc] of lib.bundle.components) {
+               if (!matchComponentSelection(components, desc.selectors)) continue
+               const baseDir = Path.dirname(path)
+               target.add_component(desc, baseDir, lib)
+            }
+         }
       }
+
    }
 
    // Add workspace assets

@@ -50,7 +50,7 @@ function create_application_composable_target(opts: {
       target.tasks.push(new WebviewTask(target, name, title || name, webview, html_injects))
 
       if (opts.devserver) {
-         target.log.info(`+ webview '${app.library.name}': ${name} : ${opts.devserver}/${name}`)
+         target.log.info(`+ 🌐 webview: ${name} : ${opts.devserver}/${name}`)
       }
    }
 
@@ -60,7 +60,7 @@ function create_application_composable_target(opts: {
          const entry_name = lib.make_file_id("module", name.slice(0, -3))
          target.esmodules.add_entry_typescript(`export * from "./${bundle.id}/${entry_name}.js"`, name.slice(0, -3))
          if (opts.devserver) {
-            target.log.info(`+ module '${app.library.name}': ${name} : ${opts.devserver}/${name}`)
+            target.log.info(`+ 🔌 module: ${name} : ${opts.devserver}/${name}`)
          }
       }
       else {
@@ -162,7 +162,8 @@ export class BundleSelector {
       this.selected.set(bun.id, bun)
 
       // Recursively add dependencies
-      for (const depId of bun.dependencies) {
+      const deps = bun.dependencies
+      for (const depId of deps) {
          this.add(depId)
       }
       if (bun.source) {
@@ -183,9 +184,11 @@ export class BundleSelector {
    toArray(): Bundle[] {
       return topologicalSort(
          this.selected.values(),
-         bun => bun.dependencies
-            .map(id => this.selected.get(id))
-            .filter((b): b is Bundle => b !== undefined)
+         bun => {
+            const deps = bun.dependencies || []
+            return deps.map(id => this.selected.get(id))
+               .filter((b): b is Bundle => b !== undefined)
+         }
       )
    }
 

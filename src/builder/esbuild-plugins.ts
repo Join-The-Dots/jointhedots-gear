@@ -8,7 +8,7 @@ import { sassPlugin } from 'esbuild-sass-plugin'
 import { ESModulesTask } from "./build-target.ts"
 import { PackageRootDir } from "../utils/file.ts"
 
-const VirtualOutDir = Path.normalize('X:/output/')
+const VirtualOutDir = Path.normalize('X:/')
 
 export async function create_esbuild_context(
    task: ESModulesTask,
@@ -37,7 +37,7 @@ export async function create_esbuild_context(
       routeds: {
          // "@mui/icons-material/": "@mui/icons-material/esm/"
       },
-      replaceds: {
+      replaceds: task.polyfilled ? {
          // ESM shims for problematic CJS modules
          "asap": Path.resolve(PackageRootDir, "./browser-modules/asap.js"),
          "asap/raw": Path.resolve(PackageRootDir, "./browser-modules/asap-raw.js"),
@@ -80,14 +80,13 @@ export async function create_esbuild_context(
             "perf_hooks": `${jspmPolyfills}/perf_hooks.js`,
             "async_hooks": `${jspmPolyfills}/async_hooks.js`,
          })
-      }
+      } : {}
    }
 
    // Define constants
    const workspace_constants = Object.keys(ws.constants).reduce((prev, key) => {
       const name = `constants.${key}`
       prev[name] = JSON.stringify(ws.constants[key])
-      task.log.info(`+ ${name} = ${prev[name]}`)
       return prev
    }, {})
 
@@ -108,7 +107,7 @@ export async function create_esbuild_context(
       jsx: "automatic",
       jsxImportSource: "react",
       mainFields: ['browser', 'module', 'main', 'index'],
-      inject: [sideEffectsScript],
+      inject: task.polyfilled ? [sideEffectsScript] : [],
       define: {
          //'globalThis': 'window',
          'global': 'globalThis',
@@ -118,7 +117,7 @@ export async function create_esbuild_context(
       },
       plugins: [
          ...task.plugins,
-         ESModuleResolverPlugin2(modules_mapping),
+         ESModuleResolverPlugin(modules_mapping),
          StyleSheetPlugin(task),
          StoragePlugin(task),
       ],
@@ -227,105 +226,6 @@ function copyAssets(task: ESModulesTask) {
    }
 }
 
-/**
- * Plugin to fix CJS interop issues when a module exports a function directly
- * via `module.exports = fn` and then adds properties to that function.
- * 
- * The issue: When esbuild converts CJS `require()` to ESM imports, modules that
- * export a function directly with properties attached (like `module.exports = fn; fn.prop = x`)
- * may not work correctly because the ESM interop wraps things in unexpected ways.
- * 
- * This plugin converts such CJS modules to proper ESM by:
- * 1. Converting `require()` calls to ESM imports
- * 2. Wrapping the code to provide `module` and `exports`
- * 3. Exporting `module.exports` as the default export
- */
-export function CJSInteropFixPlugin(): esbuild.Plugin {
-   // List of known problematic CJS modules that export functions with properties
-   // These modules need special handling for proper ESM interop
-   const KNOWN_FUNCTION_EXPORT_MODULES = [
-      /[\\/]asap[\\/].*\.js$/,      // asap package
-      /[\\/]browser-raw\.js$/,       // asap's browser-raw.js specifically
-   ]
-
-   return {
-      name: 'cjs-interop-fix',
-      setup(build) {
-         build.onLoad({ filter: /\.js$/, namespace: 'file' }, async (args) => {
-            // Only process known problematic modules
-            const isKnownModule = KNOWN_FUNCTION_EXPORT_MODULES.some(pattern => pattern.test(args.path))
-            if (!isKnownModule) return null
-
-            // Skip @jspm/core polyfills - they're already ESM
-            if (args.path.includes('@jspm/core') || args.path.includes('@jspm\\core')) return null
-
-            let contents: string
-            try {
-               contents = await Fs.promises.readFile(args.path, 'utf8')
-            } catch {
-               return null
-            }
-
-            // Skip if already ESM (has import/export at top level without module.exports)
-            if (/^\s*(import|export)\s/m.test(contents) && !contents.includes('module.exports')) {
-               return null
-            }
-
-            // Skip if it doesn't use module.exports at all
-            if (!contents.includes('module.exports')) {
-               return null
-            }
-
-            // Extract require statements and convert to imports
-            const requires: { varName: string; modulePath: string; fullMatch: string }[] = []
-            const requireRegex = /var\s+([\w$]+)\s*=\s*require\s*\(\s*["']([^"']+)["']\s*\)\s*;?/g
-            let match: RegExpExecArray | null
-
-            while ((match = requireRegex.exec(contents)) !== null) {
-               requires.push({
-                  varName: match[1],
-                  modulePath: match[2],
-                  fullMatch: match[0]
-               })
-            }
-
-            // Build the import statements
-            const imports = requires.map((r, i) =>
-               `import __cjs_import_${i}__ from "${r.modulePath}";`
-            ).join('\n')
-
-            // Build variable assignments from imports (handle default export unwrapping)
-            const importAssignments = requires.map((r, i) =>
-               `var ${r.varName} = __cjs_import_${i}__;`
-            ).join('\n')
-
-            // Remove require statements from content
-            let transformedContent = contents
-            for (const r of requires) {
-               transformedContent = transformedContent.replace(r.fullMatch, `// ${r.fullMatch}`)
-            }
-
-            // Build the transformed module
-            const transformed = `${imports}
-var __cjs_exports__ = {};
-var __cjs_module__ = { exports: __cjs_exports__ };
-(function(module, exports) {
-${importAssignments}
-${transformedContent}
-})(__cjs_module__, __cjs_exports__);
-var __cjs_result__ = __cjs_module__.exports;
-export default __cjs_result__;
-`
-            return {
-               contents: transformed,
-               loader: 'js',
-               resolveDir: Path.dirname(args.path)
-            }
-         })
-      }
-   }
-}
-
 export function StyleSheetPlugin(task: ESModulesTask) {
    return sassPlugin({
       type: 'style',
@@ -345,9 +245,11 @@ export function StoragePlugin(task: ESModulesTask): esbuild.Plugin {
    return {
       name: "dipatch-files",
       setup: (build) => {
+         var buildStartTime: number = 0
          build.onStart(() => {
             task.log.clear()
             task.log.info("Build started...")
+            buildStartTime = performance.now()
          })
          build.onEnd(async (result) => {
             if (result.errors.length > 0) {
@@ -360,24 +262,36 @@ export function StoragePlugin(task: ESModulesTask): esbuild.Plugin {
                task.log.warn(warning)
             }
             if (result.outputFiles) {
+               const storeStart = performance.now()
                const tx = task.target.edit()
                for (const file of result.outputFiles) {
                   if (file.path.startsWith(VirtualOutDir)) {
                      const path = file.path.slice(VirtualOutDir.length)
                      tx.commitFile(path, file.contents)
-                     if (Buffer.from(file.contents).toString().includes(`__require("`)) {
-                        task.log.warn(`Dangerous '__require' detected in output chunk: ${path}`)
-                     }
+                     checkFileTranspilation(path, file)
                   }
                   else {
                      throw new Error(`Invalid output file: ${file.path}`)
                   }
                }
                task.target.store()
-               task.log.info(`Build completed with ${result.outputFiles.length} file(s)`)
+
+               const storeTime = (performance.now() - storeStart) / 1000
+               const buildTime = (performance.now() - buildStartTime) / 1000
+               task.log.info(`Build completed with ${result.outputFiles.length} file(s) in ${buildTime.toFixed(2)}s (store: ${storeTime.toFixed(2)}s)`)
             }
             return null
          })
+         function checkFileTranspilation(path: string, file: esbuild.OutputFile) {
+            const content = Buffer.from(file.contents).toString()
+            if (content.includes(`__require(`)) {
+               const matches = content.match(/__require\(["'][^"']+["']\)/g)
+               if (matches) {
+                  const unique = [...new Set(matches)]
+                  task.log.warn(`Unmanaged require detected in '${path}': ${unique.join(", ")}`)
+               }
+            }
+         }
       }
    }
 }
@@ -388,7 +302,7 @@ export interface ESModuleResolverOptions {
    replaceds?: Record<string, string>
 }
 
-export function ESModuleResolverPlugin2(opts: ESModuleResolverOptions): esbuild.Plugin {
+export function ESModuleResolverPlugin(opts: ESModuleResolverOptions): esbuild.Plugin {
 
    const internalLoaders: Record<string, esbuild.Loader> = {
       ".ts": "ts", ".tsx": "tsx", ".js": "js", ".jsx": "jsx",

@@ -99,7 +99,7 @@ export class SubStorageFiles implements IStorageZone {
       return this.baseDir
    }
    clean() {
-
+      directory.clean(this.baseDir)
    }
    edit(scratch?: boolean): IStorageTransaction {
       return new StorageTransaction(this.baseDir, scratch, this.root)
@@ -119,8 +119,7 @@ export class StorageFiles implements IStorageZone {
       return this.baseDir
    }
    clean() {
-      removeDirectory(this.baseDir)
-      directory.make(this.baseDir)
+      directory.clean(this.baseDir)
    }
    edit(scratch?: boolean): IStorageTransaction {
       return new StorageTransaction(this.baseDir, scratch, this)

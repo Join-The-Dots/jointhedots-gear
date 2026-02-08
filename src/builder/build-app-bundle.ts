@@ -1,6 +1,6 @@
 import { Bundle, Library } from "../model/workspace.ts"
-import { StorageFiles } from "../model/storage.ts"
-import { BuildTarget, ComponentCatalogsTask } from "./build-target.ts"
+import { StorageFiles, type IStorageZone } from "../model/storage.ts"
+import { BuildTarget, BundleManifestTask } from "./build-target.ts"
 import { TypescriptDefinitionTask } from "./emit-dts.ts"
 import Path from "node:path"
 import { PathQualifier } from "./helpers/path-helpers.ts"
@@ -26,15 +26,14 @@ export enum PathStatus {
 export function create_bundle_target(opts: {
    bundle: Bundle
    library: Library
-   shelve: StorageFiles
+   storage: IStorageZone
    version: string
    devmode: boolean
    watch: boolean
    clean: boolean
 }): BuildTarget {
-   const { bundle, library, shelve } = opts
+   const { bundle, library, storage } = opts
    const lib = library
-   const storage = shelve.branch(bundle.id)
    const target = new BuildTarget(bundle.id, storage, lib.workspace, opts.devmode == true, opts.watch == true, opts.clean == true)
    const manifs = create_manifests(lib, bundle, opts.version)
 
@@ -44,9 +43,6 @@ export function create_bundle_target(opts: {
    // Add bundle types.d.ts
    target.tasks.push(new TypescriptDefinitionTask(target, lib))
 
-   // Add components catalog
-   target.tasks.push(new ComponentCatalogsTask(target))
-
    // Add bundle exporteds
    const { esmodules } = target
    for (const exp_id in manifs.entries) {
@@ -54,10 +50,17 @@ export function create_bundle_target(opts: {
       esmodules.add_entry(exp.basename, exp.source)
    }
 
-   // Add bundle components
-   for (const [path, desc] of lib.components) {
-      const baseDir = Path.dirname(path)
-      target.add_component(desc, baseDir, lib)
+   // Add bundle content
+   if (bundle) {
+
+      // Add bundle manifest
+      target.tasks.push(new BundleManifestTask(target, lib.bundle))
+
+      // Add bundle components
+      for (const [path, desc] of bundle.components) {
+         const baseDir = Path.dirname(path)
+         target.add_component(desc, baseDir, lib)
+      }
    }
 
    // Add declarations descriptors
@@ -99,8 +102,9 @@ export function create_bundle_target(opts: {
    const paths_qualifier = new PathQualifier<PathStatus | Bundle>()
    paths_qualifier.set(".", PathStatus.Internal)
    paths_qualifier.set("..", PathStatus.Internal)
-   if (bundle.dependencies) {
-      for (const dep of bundle.dependencies) {
+   const deps = bundle.dependencies
+   if (deps) {
+      for (const dep of deps) {
          paths_qualifier.set(dep, PathStatus.ExternalBundle)
       }
    }
@@ -200,10 +204,13 @@ export function create_bundle_target(opts: {
 export async function build_app_composable_bundle(opts: BuildBundleOptions) {
    const { bundle } = opts
    if (bundle.source) {
+      const storage = opts.shelve.branch(bundle.id)
+      storage.clean()
+
       const target = create_bundle_target({
          bundle,
          library: bundle.source,
-         shelve: opts.shelve,
+         storage: storage,
          version: opts.version,
          devmode: opts.devmode,
          watch: opts.watch,

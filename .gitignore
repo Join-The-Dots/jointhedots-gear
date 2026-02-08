@@ -1,4 +1,5 @@
 /esm
 /node_modules
 /dist
+/deps
 *.tgz

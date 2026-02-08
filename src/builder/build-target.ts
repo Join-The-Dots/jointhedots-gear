@@ -1,9 +1,7 @@
-import Fs from "node:fs"
-import Process from "node:process"
 import Path from "node:path"
 import MIME from 'mime'
-import { makeComponentPublication, type ComponentCatalogsDescriptor, type ComponentID, type ComponentManifest, type ComponentPublication, type ResourceEntry } from "../model/component.ts"
-import { type AssetsEntry, Library, Workspace } from "../model/workspace.ts"
+import { makeComponentPublication, type ComponentID, type ComponentManifest, type ComponentPublication, type ResourceEntry } from "../model/component.ts"
+import { type AssetsEntry, Bundle, Library, Workspace } from "../model/workspace.ts"
 import type { Log } from "../model/helpers/logger.ts"
 import { create_esbuild_context } from "../builder/esbuild-plugins.ts"
 import { copyToStorageStream, type IStorageTransaction, type IStorageZone } from "../model/storage.ts"
@@ -17,40 +15,26 @@ export abstract class BuildTask {
    abstract execute(): Promise<void>
 }
 
-export class ComponentCatalogsTask extends BuildTask {
+export class BundleManifestTask extends BuildTask {
+   constructor(readonly target: BuildTarget, readonly bundle: Bundle) {
+      super(target)
+   }
    async execute() {
-      const { target } = this
+      const { target, bundle } = this
+      const { manifest } = bundle
       const tx = this.target.edit()
 
       // Emit static components manifest
-      const manifest: ComponentCatalogsDescriptor = {
-         name: target.name,
-         baseline: target.workspace.version,
-         components: {},
-         catalogs: {},
-      }
-      const catalogs: Record<string, ComponentPublication[]> = { "every": [] }
-      for (const id in target.components) {
-         const manif = target.components[id]
+      const components: ComponentPublication[] = []
+      for (const manif of target.components.values()) {
          const pub = makeComponentPublication(manif)
-         if (Array.isArray(manif.catalogs)) {
-            for (const name of manif.catalogs) {
-               let catalog = catalogs[name]
-               if (!catalog) catalog = catalogs[name] = []
-               catalog.push(pub)
-            }
-         }
-         catalogs.every.push(pub)
-         manifest.components[id] = await tx.commitContent(JSON.stringify(manif, null, 2), MIME.getType(".json"))
+         pub.ref = await tx.commitContent(JSON.stringify(manif, null, 2), MIME.getType(".json"))
+         components.push(pub)
       }
+      manifest.data.components = components
 
-      // Emit static components catalogs
-      for (const name in catalogs) {
-         const catalog = JSON.stringify(catalogs[name], null, 2)
-         manifest.catalogs[name] = await tx.commitContent(catalog, MIME.getType(".json"))
-      }
-
-      await tx.commitFile(`components.manifest.json`, JSON.stringify(manifest, null, 2))
+      // Emit bundle manifest
+      await tx.commitFile(`bundle.manifest.json`, JSON.stringify(manifest, null, 2))
    }
 }
 
@@ -76,7 +60,7 @@ export class AssetsTask extends BuildTask {
          asset = { from, to: entry.to }
       }
 
-      this.log.info(`+ assets '${library.name}': ${asset.from} -> ${asset.to}`)
+      this.log.info(`+ 📎 assets '${library.name}': ${asset.from} -> ${asset.to}`)
       this.assets.push(asset)
    }
    add_static_text(name: string, data: string) {
@@ -109,6 +93,7 @@ export class ESModulesTask extends BuildTask {
    plugins: esbuild.Plugin[] = []
    context: esbuild.BuildContext = null
    transaction: IStorageTransaction = null
+   polyfilled: boolean = true
 
    add_entry(name: string, path: string) {
       this.entries[name] = path
@@ -190,7 +175,7 @@ export class BuildTarget {
    }
    add_component(descriptor: ComponentManifest, baseDir: string, library: Library) {
       const id = descriptor.$id
-      if (this.components[id]) {
+      if (this.components.has(id)) {
          throw new Error(createComponentDuplicateMessage(id, this.workspace))
       }
 
@@ -215,7 +200,7 @@ export class BuildTarget {
          }
       }
 
-      this.components[id] = manifest
+      this.components.set(id, manifest)
    }
    async build() {
       if (this.clean) this.storage.clean()
@@ -245,13 +230,13 @@ export class BuildTarget {
 function createComponentDuplicateMessage(id: string, workspace: Workspace) {
    const duplicates = []
    const libs = []
-   for (const lib of workspace.libraries) {
-      for (const [cpath, cmanifest] of lib.components.entries()) {
+   for (const bun of workspace.bundles) {
+      for (const [cpath, cmanifest] of bun.components.entries()) {
          if (cmanifest.$id === id) {
             duplicates.push(`\n - ${cpath}`)
          }
       }
-      libs.push(`\n - ${lib.name}: ${lib.path}`)
+      libs.push(`\n - ${bun.id}: ${bun.path}`)
    }
    return `Component '${id}' declared multiple times: ${duplicates.join("")}\n> libraries:${libs.join("")}\n`
 }

@@ -467,7 +467,7 @@ export class TypescriptDefinitionTask extends BuildTask {
          logDiagnostics(this.log, diagnostics)
       }
       catch (e) {
-         this.log.error("! no 'type.d.ts' will be generated for the package:" + e.message)
+         this.log.error("no 'type.d.ts' will be generated for the package:" + e.message)
       }
 
    }

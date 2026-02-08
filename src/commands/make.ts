@@ -1,5 +1,4 @@
 import Path from 'node:path'
-import Fs from 'node:fs'
 import { type CommandModule } from "yargs"
 import { StorageFiles } from "../model/storage.ts"
 import { type AppEntry, Bundle, Library, open_workspace } from "../model/workspace.ts"
@@ -7,6 +6,7 @@ import { build_application } from "../builder/build-application.ts"
 import { build_app_composable_bundle } from "../builder/build-app-bundle.ts"
 import { build_library } from "../builder/build-library.ts"
 import { makeNormalizedName, NameStyle } from '../utils/normalized-name.js'
+import { resolvePackageVersion } from "../model/helpers/package-npm.ts"
 
 type MakeOptions = {
    watch?: boolean
@@ -81,7 +81,7 @@ export function command_make(): CommandModule<any, MakeOptions & {
 
          let version = argv.versioned
          if (version === "*") {
-            version = JSON.parse(Fs.readFileSync("package.json").toString())?.version
+            version = resolvePackageVersion(argv.ws ?? ".")
             ws.log.warn(`Use version: ${version}`)
          }
 
@@ -106,7 +106,7 @@ export function command_make(): CommandModule<any, MakeOptions & {
          else if (argv.bundles) {
             for (const name of argv.bundles.split(",")) {
                const bundle = ws.get_bundle(name)
-               if (bundle) bundles.push(bundle)
+               if (bundle) bundles.push(bundle) 
                else ws.log.error(`Bundle not found: ${name}`)
             }
          }

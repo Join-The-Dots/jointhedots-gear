@@ -146,7 +146,7 @@ export function stringifyLogEntryPretty(loggerId: string, entry: LogEntry): stri
    const styles: Record<LogKind, { icon: string; color: string }> = {
       error: { icon: "✖", color: "\x1b[31m" },  // red
       warn: { icon: "⚠", color: "\x1b[33m" },  // yellow
-      info: { icon: "◆", color: "\x1b[36m" },  // cyan
+      info: { icon: "▹", color: "\x1b[36m" },  // cyan
       success: { icon: "✔", color: "\x1b[32m" },  // green
       debug: { icon: "🪲", color: "\x1b[34m" },  // blue
       trace: { icon: "👣", color: "\x1b[90m" }  // gray

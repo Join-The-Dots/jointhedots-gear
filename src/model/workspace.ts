@@ -3,7 +3,7 @@ import Fsp from "node:fs/promises"
 import Path from "node:path"
 import Process from "node:process"
 import { readJsonFile } from "./storage.ts"
-import { type BundleID, type BundleManifest, type ComponentManifest } from "./component.ts"
+import { type BundleID, type BundleManifest, type ComponentManifest, type DistributedConfig } from "./component.ts"
 import { topologicalSort } from "../utils/graph-ordering.ts"
 import type { WebAppManifest } from "web-app-manifest"
 import DotEnv from "dotenv"
@@ -81,41 +81,13 @@ export type PackageExport = string | {
    types?: string
 }
 
-export type PackageBundleDescriptor = {
-   // Bundle id (unique in system, is also a private components namespace)
-   id: string
-   // Bundle alias (name that can help to connect it to library name)
-   alias?: string
-   // Bundle library/package origin
-   package?: string
-   // Bundle namespace (allow to enrich an public components namespace)
-   namespaces?: string[]
-   // Bundle dependencies
-   dependencies?: string[]
-   // Package distribued by this bundle (force dependents bundle to use these package distribuable instead of bundling them)
-   // > Used for shared library, ex: react, react-dom / or huge one, ex: @material/mui, ...
-   distribueds?: string[] | {
-      [packageName: string]: string | DistributedConfig
-   }
-}
-
-/** Configuration for a distributed package */
-export interface DistributedConfig {
-   /** Version specifier (e.g., "*", "^18.0.0") */
-   version?: string
-   /** Interop type: 'esm' | 'cjs-default' | 'cjs-named' */
-   interop?: 'esm' | 'cjs-default' | 'cjs-named'
-   /** List of named exports to re-export (required for cjs-named interop) */
-   exports?: string[]
-}
-
 export interface PackageDescriptor {
    // Package definition
    name: string
    version: string
    module?: string
    description?: string
-   
+
    // Specific to this tool
    componentsContainer?: boolean
 
@@ -164,7 +136,6 @@ export class Library extends WorkspaceItem {
    bundle: Bundle = null
    declarations = new Map<FileID, DeclarationDescriptor>()
    applications = new Map<FileID, AppDescriptor>()
-   components = new Map<FileID, ComponentManifest>()
    externals: Record<string, string> = {}
    search_directories: FileID[] = null
    constructor(
@@ -205,27 +176,35 @@ export class Library extends WorkspaceItem {
 
 // Un bundle represente un ensemble construit exposant des composants et point d'entrée
 export class Bundle extends WorkspaceItem {
-   id: BundleID
    alias: string
-   manifest: BundleManifest // The bundle is a component with subcomponents
    components = new Map<FileID, ComponentManifest>()
    distribueds: { [packageName: string]: string | DistributedConfig } = {}
-   namespaces: string[] = []
-   dependencies: BundleID[] = []
-   source?: Library = null
+   configured: boolean = false
    constructor(
-      readonly descriptor: PackageBundleDescriptor,
+      public manifest: BundleManifest,
+      readonly path: string,
       readonly workspace: Workspace,
+      readonly source: Library = null,
    ) {
-      super(workspace, `bundle:${descriptor.id}`)
-      Object.assign(this, descriptor)
+      super(workspace, `bundle:${manifest.$id}`)
+      this.configured = (source === null)
+   }
+   get id(): BundleID {
+      return this.manifest.$id
+   }
+   get dependencies() {
+      return this.manifest.data.dependencies
+   }
+   get exports() {
+      return this.manifest.data.exports
    }
    resolve_export(ref: string): string {
       if (!this.manifest) {
          const manifs = create_manifests(this.source, this)
          this.manifest = manifs.bundle
+         this.configured = true
       }
-      return this.manifest.exports?.[ref]
+      return this.exports?.[ref]
    }
 }
 

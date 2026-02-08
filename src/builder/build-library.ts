@@ -1,7 +1,7 @@
 import { Library, type PackageDescriptor } from "../model/workspace.ts"
 import { StorageFiles } from "../model/storage.ts"
 import ChildProcess from "child_process"
-import { BuildTarget, ComponentCatalogsTask } from "./build-target.ts"
+import { BuildTarget, BundleManifestTask } from "./build-target.ts"
 import { TypescriptDefinitionTask } from "./emit-dts.ts"
 import Path from "node:path"
 import { create_manifests } from "../model/helpers/create-manifests.ts"
@@ -37,16 +37,21 @@ export function create_library_target(opts: {
    // Add library types.d.ts
    target.tasks.push(new TypescriptDefinitionTask(target, lib))
 
-   // Add components catalog
-   target.tasks.push(new ComponentCatalogsTask(target))
-
    // Add library package.json
    target.assets.add_static_json("package.json", manifs.package)
 
-   // Add library components
-   for (const [path, desc] of lib.components) {
-      const baseDir = Path.dirname(path)
-      target.add_component(desc, baseDir, lib)
+   // Add bundle content
+   const { bundle } = lib
+   if (bundle) {
+
+      // Add bundle catalog
+      target.tasks.push(new BundleManifestTask(target, bundle))
+
+      // Add library components
+      for (const [path, desc] of bundle.components) {
+         const baseDir = Path.dirname(path)
+         target.add_component(desc, baseDir, lib)
+      }
    }
 
    // Add declarations descriptors
@@ -60,6 +65,7 @@ export function create_library_target(opts: {
    }
 
    // Register esbuild plugin for external dependencies
+   target.esmodules.polyfilled = false
    target.esmodules.plugins.push({
       name: "externals",
       setup(build) {
@@ -77,6 +83,8 @@ export function create_library_target(opts: {
 }
 
 export async function build_library(opts: BuildLibraryOptions, packageDir?: string) {
+   //opts.storage.clean()
+
    const target = create_library_target({
       library: opts.library,
       storage: opts.storage,

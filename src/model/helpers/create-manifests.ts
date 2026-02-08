@@ -48,40 +48,38 @@ export function create_manifests(lib: Library, bun: Bundle, build_version?: stri
    entries: ExportEntries
 } {
    const entries = create_export_map(lib, bun)
-   const publications: Record<string, ComponentPublication> = {}
-
-   for (const comp of lib.components.values()) {
-      const { $id } = comp
-      publications[$id] = makeComponentPublication(comp)
-   }
 
    let bundle_manif: BundleManifest = null
    if (bun) {
-      bundle_manif = {
-         ...bun.descriptor,
-         type: "bundle",
-         $id: bun.id,
+      bundle_manif = bun.manifest
+
+      const components: ComponentPublication[] = []
+      for (const comp of bun.components.values()) {
+         components.push(makeComponentPublication(comp))
+      }
+
+      bundle_manif.data = {
          baseline: bun.id + "-v0",
-         catalogs: {},
-         components: publications,
+         components: components,
          exports: {},
       }
       for (const id in entries) {
          const exp = entries[id]
-         bundle_manif.exports[id] = exp.filename
+         bundle_manif.data.exports[id] = exp.filename
       }
    }
 
    // Add bundle package.json 
-   const {
-      exports, scripts, devDependencies, bundledDependencies, optionalDependencies,
-      ...packageFields
-   } = lib.descriptor
    const pkg_manif = {
-      ...packageFields,
+      ...lib.descriptor,
       name: lib.name,
       version: build_version || lib.descriptor.version,
       type: "module",
+      exports: undefined,
+      scripts: undefined,
+      private: undefined,
+      devDependencies: undefined,
+      optionalDependencies: undefined,
    } as PackageDescriptor
 
    for (const id in entries) {

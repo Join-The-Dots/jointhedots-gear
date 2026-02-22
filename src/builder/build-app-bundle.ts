@@ -5,6 +5,7 @@ import { TypescriptDefinitionTask } from "./emit-dts.ts"
 import Path from "node:path"
 import { PathQualifier } from "./helpers/path-helpers.ts"
 import { create_manifests } from "../model/helpers/create-manifests.ts"
+import { DependencyDeduplicationPlugin, collectLibraryGraph } from "./esbuild-plugins.ts"
 
 export type BuildBundleOptions = {
    bundle: Bundle
@@ -197,6 +198,12 @@ export function create_bundle_target(opts: {
          })
       }
    })
+
+   // Register esbuild plugin for dependency deduplication (graph-based + singleton)
+   const ws = library.workspace
+   const rootNodeModules = ws.search_directories[0] || Path.join(ws.path, 'node_modules')
+   const libGraph = collectLibraryGraph(library)
+   target.esmodules.plugins.push(DependencyDeduplicationPlugin(libGraph, rootNodeModules, target.log))
 
    return target
 }

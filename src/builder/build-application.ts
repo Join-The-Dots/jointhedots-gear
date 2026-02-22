@@ -7,6 +7,7 @@ import Fs from "node:fs"
 import Sharp from "sharp"
 import MIME from 'mime'
 import { build_app_composable_host } from "./build-app-host.ts"
+import { DependencyDeduplicationPlugin } from "./esbuild-plugins.ts"
 
 export type BuildApplicationOptions = {
    app: AppEntry
@@ -157,8 +158,9 @@ export function create_application_monolith_target(opts: {
       }
    }
 
-   // Register esbuild plugin for peers dependencies deduplication
-   target.esmodules.plugins.push(createPeersDependenciesDeduplicationPlugin(target, app, libs))
+   // Register esbuild plugin for dependency deduplication (graph-based + singleton)
+   const rootNodeModules = ws.search_directories[0] || Path.join(ws.path, 'node_modules')
+   target.esmodules.plugins.push(DependencyDeduplicationPlugin(libs, rootNodeModules, target.log))
    return target
 }
 
@@ -332,121 +334,4 @@ function createIcon(base: Sharp.Sharp, size: number, format: "webp" | "png"): Pr
       .toBuffer()
 }
 
-/**
- * Creates an esbuild plugin that deduplicates peer dependencies across workspace libraries.
- * 
- * When multiple libraries declare the same peer dependency, this plugin ensures they all
- * resolve to the same version from the application's node_modules, preventing duplicate
- * bundles of packages like React, React DOM, etc.
- */
-function createPeersDependenciesDeduplicationPlugin(target: BuildTarget, app: AppEntry, libs: Library[]): import('esbuild').Plugin {
-   // Collect all peer dependencies from all workspace libraries
-   const peerDependencies = new Map<string, string>()
 
-   // Add app's own peer dependencies first (highest priority)
-   const appPeers = app.library.descriptor.peerDependencies || {}
-   for (const [name, version] of Object.entries(appPeers)) {
-      peerDependencies.set(name, version as string)
-   }
-
-   // Add peer dependencies from all dependent libraries
-   for (const lib of libs) {
-      const libPeers = lib.descriptor.peerDependencies || {}
-      for (const [name, version] of Object.entries(libPeers)) {
-         // Only add if not already defined (app takes priority)
-         if (!peerDependencies.has(name)) {
-            peerDependencies.set(name, version as string)
-         }
-      }
-   }
-
-   // Find the app's node_modules path (where app dependencies are installed)
-   const appNodeModules = Path.join(app.library.path, 'node_modules')
-
-   // Find the root node_modules path from workspace search directories
-   const ws = app.library.workspace
-   const rootNodeModules = ws.search_directories[0] || Path.join(ws.path, 'node_modules')
-
-   // Determine which node_modules to use for resolution
-   // Prefer app's node_modules if it exists, otherwise use root
-   const targetNodeModules = Fs.existsSync(appNodeModules) ? appNodeModules : rootNodeModules
-
-   // Cache resolved paths to avoid re-resolving the same package multiple times
-   const resolvedPaths = new Map<string, string>()
-
-   // Log what we're deduplicating
-   target.log.trace(`[deduplicate-peers] Deduplicating ${peerDependencies.size} peer dependencies from ${targetNodeModules}:`)
-   for (const [name] of peerDependencies) {
-      target.log.trace(`  - ${name}`)
-   }
-
-   return {
-      name: "deduplicate-peers-dependencies",
-      setup(build) {
-         // Intercept resolution of peer dependencies
-         build.onResolve({ filter: /.*/ }, async (args) => {
-            // Avoid infinite recursion - skip if already processed by this plugin
-            if (args.pluginData?.deduplicatedPeer) {
-               return null
-            }
-
-            // Skip if not a bare module specifier (relative or absolute paths)
-            if (args.path.startsWith('.') || args.path.startsWith('/') || Path.isAbsolute(args.path)) {
-               return null
-            }
-
-            // Extract the package name (handle scoped packages like @scope/package)
-            const packageName = getPackageName(args.path)
-
-            // Check if this is a peer dependency we're tracking
-            if (!peerDependencies.has(packageName)) {
-               return null
-            }
-
-            // Check cache first
-            const cacheKey = args.path
-            if (resolvedPaths.has(cacheKey)) {
-               return { path: resolvedPaths.get(cacheKey), namespace: 'file' }
-            }
-
-            // Always resolve peer dependencies from the target node_modules
-            // This ensures all imports of the same package resolve to the same instance
-            const result = await build.resolve(args.path, {
-               kind: args.kind,
-               resolveDir: targetNodeModules,
-               importer: args.importer,
-               namespace: args.namespace,
-               pluginData: { ...args.pluginData, deduplicatedPeer: true },
-            })
-
-            if (!result.errors || result.errors.length === 0) {
-               // Cache the resolved path
-               resolvedPaths.set(cacheKey, result.path)
-               target.log.trace(`[deduplicate-peers] ${args.path} -> ${result.path}`)
-               return result
-            }
-
-            return null
-         })
-      }
-   }
-}
-
-/**
- * Extracts the package name from an import path.
- * Handles both regular packages (e.g., "react") and scoped packages (e.g., "@scope/package").
- */
-function getPackageName(importPath: string): string {
-   if (importPath.startsWith('@')) {
-      // Scoped package: @scope/package or @scope/package/subpath
-      const parts = importPath.split('/')
-      if (parts.length >= 2) {
-         return `${parts[0]}/${parts[1]}`
-      }
-      return importPath
-   } else {
-      // Regular package: package or package/subpath
-      const slashIndex = importPath.indexOf('/')
-      return slashIndex === -1 ? importPath : importPath.substring(0, slashIndex)
-   }
-}

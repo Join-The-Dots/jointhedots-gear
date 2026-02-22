@@ -7,6 +7,8 @@ import * as esbuild from 'esbuild'
 import { sassPlugin } from 'esbuild-sass-plugin'
 import { ESModulesTask } from "./build-target.ts"
 import { PackageRootDir } from "../utils/file.ts"
+import type { Log } from "../model/helpers/logger.ts"
+import { Library } from "../model/workspace.ts"
 
 const VirtualOutDir = Path.normalize('X:/')
 
@@ -32,6 +34,22 @@ export async function create_esbuild_context(
       return result
    }
 
+   // Scan @jspm/core/nodelibs/browser and build mappings for all polyfill files
+   function buildJspmMappings(dir: string, base = ''): Record<string, string> {
+      const result: Record<string, string> = {}
+      for (const entry of Fs.readdirSync(dir, { withFileTypes: true })) {
+         const rel = base ? `${base}/${entry.name}` : entry.name
+         if (entry.isDirectory()) {
+            Object.assign(result, buildJspmMappings(Path.join(dir, entry.name), rel))
+         } else if (entry.isFile() && entry.name.endsWith('.js') && !entry.name.startsWith('chunk-')) {
+            const mod = rel.slice(0, -3) // strip .js
+            result[mod] = Path.join(dir, entry.name)
+            result[`node:${mod}`] = Path.join(dir, entry.name)
+         }
+      }
+      return result
+   }
+
    const modules_mapping: ESModuleResolverOptions = {
       task,
       routeds: {
@@ -41,45 +59,17 @@ export async function create_esbuild_context(
          // ESM shims for problematic CJS modules
          "asap": Path.resolve(PackageRootDir, "./browser-modules/asap.js"),
          "asap/raw": Path.resolve(PackageRootDir, "./browser-modules/asap-raw.js"),
-         // Node.js polyfills
+         // Node.js polyfills - auto-discovered from @jspm/core/nodelibs/browser
+         ...buildJspmMappings(jspmPolyfills),
+         // readable-stream alias
+         "readable-stream": `${jspmPolyfills}/stream.js`,
+         // Custom browser module overrides (take precedence over jspm)
          ...withNodePrefix({
             "buffer": Path.resolve(PackageRootDir, "./browser-modules/buffer.js"),
             "process": Path.resolve(PackageRootDir, "./browser-modules/process.js"),
             "util": Path.resolve(PackageRootDir, "./browser-modules/util.js"),
             "worker_threads": Path.resolve(PackageRootDir, "./browser-modules/worker_threads.js"),
-            "child_process": `${jspmPolyfills}/child_process.js`,
-            "events": `${jspmPolyfills}/events.js`,
-            "stream": `${jspmPolyfills}/stream.js`,
-            "readable-stream": `${jspmPolyfills}/stream.js`,
-            "path": `${jspmPolyfills}/path.js`,
-            "os": `${jspmPolyfills}/os.js`,
-            "crypto": `${jspmPolyfills}/crypto.js`,
-            "fs": `${jspmPolyfills}/fs.js`,
-            "assert": `${jspmPolyfills}/assert.js`,
-            "url": `${jspmPolyfills}/url.js`,
-            "querystring": `${jspmPolyfills}/querystring.js`,
-            "string_decoder": `${jspmPolyfills}/string_decoder.js`,
-            "punycode": `${jspmPolyfills}/punycode.js`,
-            "http": `${jspmPolyfills}/http.js`,
-            "https": `${jspmPolyfills}/https.js`,
-            "zlib": `${jspmPolyfills}/zlib.js`,
-            "constants": `${jspmPolyfills}/constants.js`,
-            "timers": `${jspmPolyfills}/timers.js`,
-            "console": `${jspmPolyfills}/console.js`,
-            "vm": `${jspmPolyfills}/vm.js`,
-            "domain": `${jspmPolyfills}/domain.js`,
-            "tty": `${jspmPolyfills}/tty.js`,
-            "net": `${jspmPolyfills}/net.js`,
-            "dns": `${jspmPolyfills}/dns.js`,
-            "dgram": `${jspmPolyfills}/dgram.js`,
-            "cluster": `${jspmPolyfills}/cluster.js`,
-            "module": `${jspmPolyfills}/module.js`,
-            "readline": `${jspmPolyfills}/readline.js`,
-            "repl": `${jspmPolyfills}/repl.js`,
-            "tls": `${jspmPolyfills}/tls.js`,
-            "perf_hooks": `${jspmPolyfills}/perf_hooks.js`,
-            "async_hooks": `${jspmPolyfills}/async_hooks.js`,
-         })
+         }),
       } : {}
    }
 
@@ -102,7 +92,7 @@ export async function create_esbuild_context(
       splitting: true,
       treeShaking: true,
       write: false,
-      logLevel: 'silent',
+      logLevel: 'debug',
       chunkNames: "chunk.[hash]",
       jsx: "automatic",
       jsxImportSource: "react",
@@ -227,11 +217,22 @@ function copyAssets(task: ESModulesTask) {
 }
 
 export function StyleSheetPlugin(task: ESModulesTask) {
+   const workspacePath = task.target.workspace.path
+   const useTailwind = hasTailwindConfig(workspacePath)
+   if (useTailwind) {
+      task.log.info(`+ 🎨 Tailwind CSS detected`)
+   }
+
    return sassPlugin({
       type: 'style',
       async transform(source: string, _resolveDir: string, filePath: string) {
-         const { css } = await postcss()
-            .use(copyAssets(task))
+         const plugins: postcss.AcceptedPlugin[] = []
+         if (useTailwind) {
+            const tailwindcss = (await import('@tailwindcss/postcss')).default
+            plugins.push(tailwindcss({ base: workspacePath }))
+         }
+         plugins.push(copyAssets(task))
+         const { css } = await postcss(plugins)
             .process(source, {
                from: filePath,
                to: `index.css`
@@ -239,6 +240,33 @@ export function StyleSheetPlugin(task: ESModulesTask) {
          return css
       }
    })
+}
+
+/** Check if the workspace has a Tailwind CSS configuration */
+function hasTailwindConfig(workspacePath: string): boolean {
+   const configFiles = [
+      'tailwind.config.js',
+      'tailwind.config.ts',
+      'tailwind.config.mjs',
+      'tailwind.config.cjs',
+   ]
+   for (const file of configFiles) {
+      if (Fs.existsSync(Path.join(workspacePath, file))) {
+         return true
+      }
+   }
+   // Tailwind v4: detect @tailwindcss/postcss in workspace dependencies
+   try {
+      const pkgPath = Path.join(workspacePath, 'package.json')
+      if (Fs.existsSync(pkgPath)) {
+         const pkg = JSON.parse(Fs.readFileSync(pkgPath, 'utf-8'))
+         const allDeps = { ...pkg.dependencies, ...pkg.devDependencies }
+         if (allDeps['tailwindcss'] || allDeps['@tailwindcss/postcss']) {
+            return true
+         }
+      }
+   } catch { }
+   return false
 }
 
 export function StoragePlugin(task: ESModulesTask): esbuild.Plugin {
@@ -300,6 +328,126 @@ export interface ESModuleResolverOptions {
    task: ESModulesTask
    routeds?: Record<string, string>
    replaceds?: Record<string, string>
+}
+
+/**
+ * Extracts the package name from an import specifier.
+ */
+function getPackageName(path: string): string {
+   const parts = path.split('/')
+   return path.startsWith('@') && parts.length >= 2 ? `${parts[0]}/${parts[1]}` : parts[0]
+}
+
+/**
+ * Reads `singleton` field from the package.json closest to a resolved path.
+ */
+function isSingletonPackage(resolvedPath: string, packageName: string): boolean {
+   const norm = resolvedPath.replace(/\\/g, '/')
+   const marker = `/node_modules/${packageName}/`
+   const idx = norm.lastIndexOf(marker)
+   if (idx === -1) return false
+   try {
+      const pkgJson = JSON.parse(Fs.readFileSync(resolvedPath.substring(0, idx + marker.length) + 'package.json', 'utf-8'))
+      return pkgJson.singleton === true
+   } catch { return false }
+}
+
+/**
+ * Collects workspace libraries reachable from a root library (BFS).
+ * Index 0 = most dominant.
+ */
+export function collectLibraryGraph(rootLib: Library): Library[] {
+   const libs: Library[] = [rootLib]
+   const ws = rootLib.workspace
+   for (let i = 0; i < libs.length; i++) {
+      const deps = { ...libs[i].descriptor.dependencies, ...libs[i].descriptor.devDependencies, ...libs[i].descriptor.peerDependencies }
+      for (const id in deps) {
+         const dep = ws.get_library(id)
+         if (dep && !libs.includes(dep)) libs.push(dep)
+      }
+   }
+   return libs
+}
+
+/**
+ * Generic dependency deduplication plugin.
+ *
+ * For each npm package seen across multiple workspace libraries, forces resolution
+ * from the dominant library (first in BFS order) to guarantee a single version.
+ * Packages declaring `"singleton": true` in their package.json are always resolved
+ * from the root node_modules.
+ */
+export function DependencyDeduplicationPlugin(libraries: Library[], rootNodeModules: string, log: Log): esbuild.Plugin {
+
+   // Build dominance map: first library (BFS) that declares a dependency wins
+   const dominantDir = new Map<string, string>()
+   const refCount = new Map<string, number>()
+   for (const lib of libraries) {
+      const deps = { ...lib.descriptor.dependencies, ...lib.descriptor.devDependencies, ...lib.descriptor.peerDependencies }
+      for (const name in deps) {
+         if (!dominantDir.has(name)) dominantDir.set(name, lib.path)
+         refCount.set(name, (refCount.get(name) || 0) + 1)
+      }
+   }
+   // Only deduplicate packages referenced by 2+ libraries
+   const shared = new Set<string>([...refCount].filter(([, c]) => c > 1).map(([n]) => n))
+   if (shared.size) log.info(`[dedup] ${shared.size} shared deps across ${libraries.length} libraries`)
+
+   // Caches
+   const resolved = new Map<string, string>()          // specifier → path
+   const singletonCache = new Map<string, boolean>()    // packageName → singleton?
+
+   return {
+      name: "dependency-deduplication",
+      setup(build) {
+         build.onResolve({ filter: /.*/ }, async (args) => {
+            if (args.pluginData?.deduplicated) return null
+            if (args.path.startsWith('.') || args.path.startsWith('/') || Path.isAbsolute(args.path)) return null
+
+            const pkg = getPackageName(args.path)
+
+            // Fast path: already resolved
+            if (resolved.has(args.path)) return { path: resolved.get(args.path)!, namespace: 'file' }
+
+            // Skip packages that are neither shared nor potentially singleton
+            if (!shared.has(pkg) && singletonCache.get(pkg) === false) return null
+
+            const pluginData = { ...args.pluginData, deduplicated: true }
+            const resolveFrom = shared.has(pkg) ? dominantDir.get(pkg)! : args.resolveDir
+
+            const result = await build.resolve(args.path, {
+               kind: args.kind, resolveDir: resolveFrom, importer: args.importer, namespace: args.namespace, pluginData,
+            })
+            if (result.errors?.length) return null
+
+            // Discover singleton status on first encounter
+            if (!singletonCache.has(pkg)) {
+               const is = isSingletonPackage(result.path, pkg)
+               singletonCache.set(pkg, is)
+               if (is) log.info(`[dedup] singleton: ${pkg}`)
+            }
+
+            // Singleton → force root resolution
+            if (singletonCache.get(pkg)) {
+               const rootResult = await build.resolve(args.path, {
+                  kind: args.kind, resolveDir: rootNodeModules, importer: args.importer, namespace: args.namespace, pluginData,
+               })
+               if (!rootResult.errors?.length) {
+                  resolved.set(args.path, rootResult.path)
+                  return rootResult
+               }
+            }
+
+            // Shared (non-singleton) → dominant resolution already done above
+            if (shared.has(pkg)) {
+               resolved.set(args.path, result.path)
+               return result
+            }
+
+            return null
+         })
+      }
+   }
 }
 
 export function ESModuleResolverPlugin(opts: ESModuleResolverOptions): esbuild.Plugin {

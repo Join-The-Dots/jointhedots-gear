@@ -92,7 +92,7 @@ export async function create_esbuild_context(
       splitting: true,
       treeShaking: true,
       write: false,
-      logLevel: 'debug',
+      logLevel: (process.env.ESBUILD_LOG_LEVEL as esbuild.LogLevel) || 'silent',
       chunkNames: "chunk.[hash]",
       jsx: "automatic",
       jsxImportSource: "react",

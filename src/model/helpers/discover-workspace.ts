@@ -6,6 +6,7 @@ import { makeNormalizedName, NameStyle } from "../../utils/normalized-name.ts"
 import { create_manifests } from "./create-manifests.ts"
 import { Bundle, Library, Workspace, type AppDescriptor, type DeclarationDescriptor, type PackageDescriptor } from "../workspace.ts"
 import { make_canonical_path, make_normalized_dirname, make_normalized_path, make_relative_path } from "../../utils/file.ts"
+import { is_config_filename, readConfigFile, readSingletonConfigFile } from "./config-loader.ts"
 
 const exclude_dirs = ["node_modules"]
 
@@ -34,8 +35,8 @@ async function discover_component(lib: Library, fpath: string) {
       return true
    }
    try {
-      const data = await Fsp.readFile(fpath)
-      const desc = JSON.parse(data.toString()) as ComponentManifest
+      const desc = await readConfigFile<ComponentManifest>(fpath)
+      if (!desc) throw new Error("failed to parse config")
       if (desc.type !== "bundle") {
          const err = checkComponentManifest(desc, fpath)
          if (err) throw err
@@ -55,8 +56,8 @@ async function discover_component(lib: Library, fpath: string) {
 
 async function discover_declaration(lib: Library, fpath: string) {
    try {
-      const data = await Fsp.readFile(fpath)
-      const desc = JSON.parse(data.toString()) as DeclarationDescriptor
+      const desc = await readConfigFile<DeclarationDescriptor>(fpath)
+      if (!desc) throw new Error("failed to parse config")
       lib.declarations.set(fpath, desc)
       lib.log.info(`+ 🔧 declaration: ${make_relative_path(lib.path, fpath)}`)
    }
@@ -67,18 +68,14 @@ async function discover_declaration(lib: Library, fpath: string) {
 
 async function discover_application(lib: Library, fpath: string) {
    try {
-      const data = await Fsp.readFile(fpath)
-      const desc = JSON.parse(data.toString()) as AppDescriptor
+      const desc = await readConfigFile<AppDescriptor>(fpath)
+      if (!desc) throw new Error("failed to parse config")
       lib.applications.set(fpath, desc)
       lib.log.info(`+ 🚀 application: ${make_relative_path(lib.path, fpath)}`)
    }
    catch (e) {
-      lib.log.error(`invalid declaration at ${fpath}: ${e?.message}`)
+      lib.log.error(`invalid application at ${fpath}: ${e?.message}`)
    }
-}
-
-function is_config_filename(fname: string, config_ext: string) {
-   return fname === config_ext || (fname.endsWith(config_ext) && fname.endsWith("." + config_ext))
 }
 
 async function discover_library_components(lib: Library, path: string, subdir: boolean = false) {
@@ -99,13 +96,13 @@ async function discover_library_components(lib: Library, path: string, subdir: b
          }
       }
       else if (fstat.isFile()) {
-         if (is_config_filename(fname, "component.json")) {
+         if (is_config_filename(fname, "component")) {
             await discover_component(lib, fpath)
          }
-         else if (is_config_filename(fname, "application.json")) {
+         else if (is_config_filename(fname, "application")) {
             await discover_application(lib, fpath)
          }
-         else if (is_config_filename(fname, "declaration.json")) {
+         else if (is_config_filename(fname, "declaration")) {
             await discover_declaration(lib, fpath)
          }
          else if (fname === "publication.json") {
@@ -114,10 +111,10 @@ async function discover_library_components(lib: Library, path: string, subdir: b
       }
    }
 
-   // Analyze libary deployment manifest 
-   const manifest_path = `${path}/bundle.manifest.json`
-   if (Fs.existsSync(manifest_path)) {
-      const manifest = JSON.parse(Fs.readFileSync(manifest_path).toString()) as BundleManifest
+   // Analyze library deployment manifest (supports json/yaml/yml/toml, singleton)
+   const manifest_result = await readSingletonConfigFile<BundleManifest>(path, "bundle.manifest", fnames)
+   if (manifest_result) {
+      const manifest = manifest_result.data
       for (const pub of manifest.data.components) {
          const fpath = path + "/" + pub.id
          await discover_component(lib, fpath)
@@ -182,8 +179,8 @@ async function discover_library(ws: Workspace, location: string) {
    const lib_not_exists = ws.libraries.reduce((r, lib) => r && lib.path !== lib_path, true)
    if (lib_not_exists) {
       const lib_desc = await readJsonFile(lib_path + "/package.json") as PackageDescriptor
-      const bundle_path = lib_path + "/bundle.component.json"
-      const bundle_desc = await readJsonFile(bundle_path)
+      const bundle_result = await readSingletonConfigFile(lib_path, "bundle.component")
+      const bundle_desc = bundle_result?.data
       if (bundle_desc || lib_desc?.componentsContainer) {
          const other = ws.get_library(lib_desc.name)
          if (other) {

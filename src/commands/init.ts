@@ -14,7 +14,14 @@ export function command_init(): CommandModule<any, {
             "json.schemas": [
                {
                   "fileMatch": [
-                     "application.json"
+                     "application.json",
+                     "*.application.json",
+                     "application.yaml",
+                     "*.application.yaml",
+                     "application.yml",
+                     "*.application.yml",
+                     "application.toml",
+                     "*.application.toml",
                   ],
                   "url": "./node_modules/@jointhedots/gear/schemas/application.schema.json"
                },
@@ -22,6 +29,8 @@ export function command_init(): CommandModule<any, {
                   "fileMatch": [
                      "component.json",
                      "*.component.json",
+                     "component.yaml",
+                     "*.component.yaml",
                      "component.yml",
                      "*.component.yml",
                      "component.toml",

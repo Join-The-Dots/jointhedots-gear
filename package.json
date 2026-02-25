@@ -1,6 +1,6 @@
 {
    "name": "@jointhedots/gear",
-   "version": "1.1.8",
+   "version": "1.1.10",
    "type": "module",
    "bin": {
       "jointhedots-gear": "esm/cli.js"
@@ -21,7 +21,7 @@
       ":build:app": "node --enable-source-maps --watch-path=esm esm/cli make --apps playground:ui --ws ../jointhedots-core",
       "serve:mono": "node --enable-source-maps --watch-path=esm esm/cli serve --app playground:ui --devmode --port 3002 --ws ../jointhedots-core",
       "serve:host": "node --enable-source-maps --watch-path=esm esm/cli serve --app playground:ui:host  --port 3002 --ws ../jointhedots-core",
-      "serve:sfe": "node --enable-source-maps --watch-path=esm esm/cli serve --app sfe-webapp --devmode --ws ../sf-explorer-app",
+      "serve:sfe": "node --enable-source-maps --watch-path=esm esm/cli serve --app sfe-demo --devmode --ws ../sf-explorer-app",
       "make:sfe": "node --enable-source-maps --watch-path=esm esm/cli make --apps sfe-chrome --devmode --ws ../sf-explorer-app",
       "prepublishOnly": "node scripts/prepublish.mjs"
    },

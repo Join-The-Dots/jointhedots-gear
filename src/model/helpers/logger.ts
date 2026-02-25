@@ -13,6 +13,7 @@ export interface Message {
 }
 
 export interface Note {
+   title?: string
    text: string
    location?: Location | string
 }
@@ -135,8 +136,12 @@ export function stringifyLogEntry(loggerId: string, entry: LogEntry): string {
    const locStr = stringifyLocation(entry.message.location)
    lines.push(`${prefix}${locStr ? ` ${locStr}` : ""} ${entry.message.text}`)
    for (const note of entry.message.notes ?? []) {
+      const noteTitle = note.title || "note"
       const noteLocStr = stringifyLocation(note.location)
-      lines.push(`  note:${noteLocStr ? ` ${noteLocStr}` : ""} ${note.text}`)
+      lines.push(`  ${noteTitle}: ${note.text}`)
+      if (noteLocStr) {
+         lines.push(`    at ${noteLocStr}`)
+      }
    }
    return lines.join("\n")
 }
@@ -161,8 +166,12 @@ export function stringifyLogEntryPretty(loggerId: string, entry: LogEntry): stri
       lines.push(`  ${dim}↪ ${locStr}${reset}`)
    }
    for (const note of entry.message.notes ?? []) {
+      const noteTitle = note.title || "note"
       const noteLocStr = stringifyLocation(note.location)
-      lines.push(`  ${dim}↳${reset} ${noteLocStr ? `${dim}${noteLocStr}${reset} ` : ""}${note.text}`)
+      lines.push(`  ${dim}↳${reset} ${bold}${noteTitle}:${reset} ${note.text}`)
+      if (noteLocStr) {
+         lines.push(`    ${dim}at ${noteLocStr}${reset}`)
+      }
    }
    return lines.join("\n")
 }

@@ -196,7 +196,7 @@ export class BuildTarget {
       if (descriptor.resources) {
          manifest.resources = {}
          for (const name in descriptor.resources) {
-            manifest.resources[name] = this.esmodules.add_resource_entry(descriptor.services[name], baseDir, library)
+            manifest.resources[name] = this.esmodules.add_resource_entry(descriptor.resources[name], baseDir, library)
          }
       }
 

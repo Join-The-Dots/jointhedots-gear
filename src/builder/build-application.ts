@@ -25,8 +25,8 @@ function collect_app_libraries(app: AppEntry): Library[] {
       const ws = lib.workspace
       const deps = {
          ...lib.descriptor.dependencies,
-         ...lib.descriptor.devDependencies,
          ...lib.descriptor.peerDependencies,
+         ...lib.descriptor.optionalDependencies,
       }
       for (const depId in deps) {
          const lib = ws.get_library(depId)
@@ -56,6 +56,7 @@ export function create_application_monolith_target(opts: {
    const ws = lib.workspace
    const target = new BuildTarget(name, opts.storage, ws, opts.devmode == true, opts.watch == true, opts.clean == true)
    const libs = collect_app_libraries(app)
+   target.log.info(`+ 🧭 app-library-graph: ${libs.map(lib => `${lib.name}@${lib.descriptor.version}`).join(", ")}`)
 
    // Generate hotreload assets
    const html_injects: string[] = []
@@ -133,12 +134,35 @@ export function create_application_monolith_target(opts: {
       target.tasks.push(new BundleManifestTask(target, bundle))
 
       // Add workspace components
+      const added_components = new Map<string, { lib: Library, path: string }>()
       for (const lib of libs) {
          if (lib.bundle) {
             for (const [path, desc] of lib.bundle.components) {
                if (!matchComponentSelection(components, desc.selectors)) continue
+               const cid = desc.$id
+               const added = added_components.get(cid)
+               if (added) {
+                  target.log.error({
+                     id: "duplicate-component-skip",
+                     text: `skip duplicate component '${cid}'`,
+                     notes: [
+                        {
+                           title: "kept",
+                           text: `${added.lib.name}@${added.lib.descriptor.version}`,
+                           location: added.path,
+                        },
+                        {
+                           title: "skipped",
+                           text: `${lib.name}@${lib.descriptor.version}`,
+                           location: path,
+                        },
+                     ],
+                  })
+                  continue
+               }
                const baseDir = Path.dirname(path)
                target.add_component(desc, baseDir, lib)
+               added_components.set(cid, { lib, path })
             }
          }
       }

@@ -116,7 +116,7 @@ async function discover_library_components(lib: Library, path: string, subdir: b
    if (manifest_result) {
       const manifest = manifest_result.data
       for (const pub of manifest.data.components) {
-         const fpath = path + "/" + pub.id
+         const fpath = path + "/" + (pub.ref ?? pub.id)
          await discover_component(lib, fpath)
       }
    }

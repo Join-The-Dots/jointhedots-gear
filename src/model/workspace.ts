@@ -70,8 +70,16 @@ export type AppEntry = {
 }
 
 export type DeclarationDescriptor = {
+   // List of tags used to define for what build options this desciptor shall be taken into account
    selectors?: string[]
+
+   // Declare assets to integrate into package
    assets?: AssetsEntry[]
+
+   // Declare exports that will be exposed in package
+   exports?: {
+      [path: string]: PackageExport
+   }
 }
 
 export type PackageExport = string | {
@@ -87,9 +95,6 @@ export interface PackageDescriptor {
    version: string
    module?: string
    description?: string
-
-   // Specific to this tool
-   componentsContainer?: boolean
 
    // Executable definition
    bin?: {
@@ -143,6 +148,7 @@ export class Library extends WorkspaceItem {
       readonly path: FileID,
       readonly descriptor: PackageDescriptor,
       readonly workspace: Workspace,
+      readonly installed: boolean,
    ) {
       super(workspace, `lib:${name}`)
       this.search_directories = workspace.search_directories.slice()
@@ -210,12 +216,19 @@ export class Bundle extends WorkspaceItem {
 
 export type Constants = { [key: string]: string | number }
 
+export type OpenWorkspaceOptions = {
+   workspace_path: string
+   devmode: boolean
+   ignored_directory?: string
+}
+
 // Workspace est l'objet a travers lequel on connecte tous les elements
 export class Workspace {
    bundles: Bundle[] = []
    libraries: Library[] = []
    constants: Constants = {}
    search_directories: string[] = []
+   ignored_directories = new Set<string>()
    readonly logger = new Logger()
    readonly log: Log
    constructor(
@@ -258,31 +271,35 @@ export class Workspace {
    }
 }
 
-export async function open_workspace(workspace_path: string, devmode: boolean): Promise<Workspace> {
-   workspace_path = Path.resolve(workspace_path)
+export async function open_workspace(options: OpenWorkspaceOptions): Promise<Workspace> {
+   const workspace_path = Path.resolve(options.workspace_path)
+   const { devmode } = options
+   const parsed_env = load_env_from_cwd_parents()
    const package_json = await readJsonFile(workspace_path + "/package.json")
    if (!package_json) throw new Error(`No 'package.json' found at workspace path: ${workspace_path}`)
 
    const ws = new Workspace(package_json.name, package_json.version, workspace_path, devmode)
-   ws.constants = patch_constants_from_env(package_json.constants || {}, devmode)
+   if (options.ignored_directory) {
+      ws.ignored_directories.add(Path.resolve(options.ignored_directory).replace(/\\/g, "/"))
+   }
+   ws.constants = patch_constants_from_env(package_json.constants || {}, devmode, parsed_env)
 
    await discover_workspace(ws)
 
    return ws
 }
 
-function patch_constants_from_env(constants: Constants, devmode: boolean): Constants {
-   const env = DotEnv.config()
+function patch_constants_from_env(constants: Constants, devmode: boolean, parsedEnv: Record<string, string>): Constants {
    for (const key in constants) {
       if (devmode) {
-         const dvalue = env.parsed["DCONST_" + key]
+         const dvalue = parsedEnv["DCONST_" + key]
          if (dvalue !== undefined) {
             constants[key] = dvalue
             continue
          }
       }
       {
-         const value = env.parsed["CONST_" + key]
+         const value = parsedEnv["CONST_" + key]
          if (value !== undefined) {
             constants[key] = value
             continue
@@ -290,6 +307,24 @@ function patch_constants_from_env(constants: Constants, devmode: boolean): Const
       }
    }
    return constants
+}
+
+function load_env_from_cwd_parents(): Record<string, string> {
+   let currentPath = Process.cwd()
+
+   while (true) {
+      const envPath = Path.join(currentPath, ".env")
+      if (Fs.existsSync(envPath)) {
+         const env = DotEnv.config({ path: envPath })
+         return env.parsed || {}
+      }
+
+      const parentPath = Path.dirname(currentPath)
+      if (parentPath === currentPath) break
+      currentPath = parentPath
+   }
+
+   return {}
 }
 
 export function matchComponentSelection(components: ComponentSelection, selectors: string[]) {

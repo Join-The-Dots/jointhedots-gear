@@ -38,6 +38,19 @@ export function command_init(): CommandModule<any, {
                   ],
                   "url": "./node_modules/@jointhedots/gear/schemas/component.schema.json"
                },
+               {
+                  "fileMatch": [
+                     "declaration.json",
+                     "*.declaration.json",
+                     "declaration.yaml",
+                     "*.declaration.yaml",
+                     "declaration.yml",
+                     "*.declaration.yml",
+                     "declaration.toml",
+                     "*.declaration.toml",
+                  ],
+                  "url": "./node_modules/@jointhedots/gear/schemas/declaration.schema.json"
+               },
             ]
          })
       }

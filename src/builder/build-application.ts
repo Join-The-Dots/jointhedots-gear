@@ -58,6 +58,9 @@ export function create_application_monolith_target(opts: {
    const libs = collect_app_libraries(app)
    target.log.info(`+ 🧭 app-library-graph: ${libs.map(lib => `${lib.name}@${lib.descriptor.version}`).join(", ")}`)
 
+   // Prepare esm setup
+   target.esmodules.set_root(lib.path)
+
    // Generate hotreload assets
    const html_injects: string[] = []
    if (opts.devserver) {

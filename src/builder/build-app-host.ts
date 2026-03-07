@@ -23,6 +23,9 @@ function create_application_composable_target(opts: {
    const ws = lib.workspace
    const target = new BuildTarget(name, opts.storage, ws, opts.devmode == true, opts.watch == true, opts.clean == true)
 
+   // Prepare esm setup
+   target.esmodules.set_root(lib.path)
+
    // Generate hotreload assets
    const html_injects: string[] = []
    if (opts.devserver) {

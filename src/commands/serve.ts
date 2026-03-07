@@ -46,9 +46,12 @@ export function command_serve(): CommandModule<any, {
             default: "./dist",
          }),
       handler: async (argv) => {
-         const ws = await open_workspace(argv.ws, argv.devmode)
+         const ws = await open_workspace({
+            workspace_path: argv.ws,
+            devmode: argv.devmode,
+         })
          const app = ws.get_application(argv.app)
-         if (!app) throw new Error(`Application '${argv.app}' not exists. Note: 'package.json' shall have "componentsContainer": true`)
+         if (!app) throw new Error(`Application '${argv.app}' not exists.`)
          if (argv.devmode) ws.log.warn("Use devmode")
 
          let version = argv.versioned

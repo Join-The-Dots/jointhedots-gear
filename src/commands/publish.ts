@@ -31,7 +31,10 @@ export function command_publish(): CommandModule<any, {
          }),
       handler: async (argv) => {
          const outputDir = Path.resolve(argv.dist)
-         const ws = await open_workspace(".", false)
+         const ws = await open_workspace({
+            workspace_path: ".",
+            devmode: false,
+         })
          await publish_aws_s3(argv.app, ws, argv.bucket, argv.region, outputDir)
       }
    }

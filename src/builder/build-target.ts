@@ -94,6 +94,11 @@ export class ESModulesTask extends BuildTask {
    context: esbuild.BuildContext = null
    transaction: IStorageTransaction = null
    polyfilled: boolean = true
+   rootPath: string = null
+
+   set_root(path: string) {
+      this.rootPath = path
+   }
 
    add_entry(name: string, path: string) {
       this.entries[name] = path
@@ -202,19 +207,32 @@ export class BuildTarget {
 
       this.components.set(id, manifest)
    }
+   private async chrona(task: BuildTask): Promise<void> {
+      const name = task.constructor.name
+      const start = Date.now()
+      await task.execute()
+      const elapsed = (Date.now() - start) / 1000
+      this.log.info(`⏱ ${name} completed in ${elapsed.toFixed(2)}s`)
+   }
    async build() {
+      const buildStartTime: number = Date.now()
+
       if (this.clean) this.storage.clean()
 
       // Make assets
-      await this.assets.execute()
+      await this.chrona(this.assets)
 
       // Make generic tasks
       for (const task of this.tasks) {
-         await task.execute()
+         await this.chrona(task)
       }
 
       // Make esmodules
-      await this.esmodules.execute()
+      await this.chrona(this.esmodules)
+
+      // Trace time
+      const buildTime = (Date.now() - buildStartTime) / 1000
+      this.log.info(`Build completed in ${buildTime.toFixed(2)}s`)
 
       if (this.watch) {
          await new Promise((resolve) => {

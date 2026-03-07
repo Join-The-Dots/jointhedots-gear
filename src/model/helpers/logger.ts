@@ -1,4 +1,6 @@
 
+import Process from "node:process"
+
 export interface Message {
    id: string
    text: string
@@ -32,6 +34,7 @@ export interface Location {
 }
 
 export type LogKind = "error" | "warn" | "info" | "success" | "debug" | "trace"
+export type LogMode = "normal" | "debug" | "verbose"
 
 export interface LogEntry {
    kind: LogKind
@@ -89,7 +92,13 @@ export class Log {
 
 export class Logger {
    private loggers = new Map<string, Log>()
-   readonly silentKinds = new Set<LogKind>(["trace", "debug"])
+   readonly mode: LogMode
+   readonly silentKinds: Set<LogKind>
+
+   constructor(mode: LogMode = getLogModeFromEnv()) {
+      this.mode = mode
+      this.silentKinds = getSilentKinds(mode)
+   }
 
    get(id: string): Log {
       let logger = this.loggers.get(id)
@@ -114,6 +123,26 @@ export class Logger {
 
    clear(): void {
       this.loggers.clear()
+   }
+}
+
+function getLogModeFromEnv(): LogMode {
+   const value = Process.env.JTDGEAR_LOG_MODE?.trim().toLowerCase()
+   if (value === "debug" || value === "verbose" || value === "normal") {
+      return value
+   }
+   return "normal"
+}
+
+function getSilentKinds(mode: LogMode): Set<LogKind> {
+   switch (mode) {
+      case "verbose":
+         return new Set<LogKind>()
+      case "debug":
+         return new Set<LogKind>(["trace"])
+      case "normal":
+      default:
+         return new Set<LogKind>(["trace", "debug"])
    }
 }
 

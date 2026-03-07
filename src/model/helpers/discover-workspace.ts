@@ -5,10 +5,20 @@ import { checkComponentManifest, type BundleManifest, type ComponentManifest } f
 import { makeNormalizedName, NameStyle } from "../../utils/normalized-name.ts"
 import { create_manifests } from "./create-manifests.ts"
 import { Bundle, Library, Workspace, type AppDescriptor, type DeclarationDescriptor, type PackageDescriptor } from "../workspace.ts"
-import { make_canonical_path, make_normalized_dirname, make_normalized_path, make_relative_path } from "../../utils/file.ts"
-import { is_config_filename, readConfigFile, readSingletonConfigFile } from "./config-loader.ts"
+import { file, make_canonical_path, make_normalized_dirname, make_normalized_path, make_relative_path } from "../../utils/file.ts"
+import { findConfigFile, is_config_filename, readConfigFile, readSingletonConfigFile } from "./config-loader.ts"
 
-const exclude_dirs = ["node_modules"]
+const exclude_dirs = ["node_modules", ".git"]
+
+function is_ignored_dir(ws: Workspace, path: string): boolean {
+   const normalized_path = make_normalized_path(path)
+   for (const ignored of ws.ignored_directories) {
+      if (normalized_path === ignored || normalized_path.startsWith(ignored + "/")) {
+         return true
+      }
+   }
+   return false
+}
 
 function setup_library_bundle(lib: Library, bundle_desc?: any) {
    const manif = make_library_bundle_manifest(lib, bundle_desc)
@@ -92,7 +102,9 @@ async function discover_library_components(lib: Library, path: string, subdir: b
       const fstat = await Fsp.stat(fpath)
       if (fstat.isDirectory()) {
          if (!exclude_dirs.includes(fname)) {
-            await discover_library_components(lib, fpath, true)
+            if (await discover_library(lib.workspace, fpath, lib.installed) === Discovered.None) {
+               await discover_library_components(lib, fpath, true)
+            }
          }
       }
       else if (fstat.isFile()) {
@@ -110,23 +122,13 @@ async function discover_library_components(lib: Library, path: string, subdir: b
          }
       }
    }
-
-   // Analyze library deployment manifest (supports json/yaml/yml/toml, singleton)
-   const manifest_result = await readSingletonConfigFile<BundleManifest>(path, "bundle.manifest", fnames)
-   if (manifest_result) {
-      const manifest = manifest_result.data
-      for (const pub of manifest.data.components) {
-         const fpath = path + "/" + (pub.ref ?? pub.id)
-         await discover_component(lib, fpath)
-      }
-   }
 }
 
 function make_library_bundle_manifest(lib: Library, file_desc?: Partial<BundleManifest>): BundleManifest {
    let $id = file_desc?.$id
    if ($id) {
-      $id  = makeNormalizedName($id, NameStyle.OBJECT)
-      if ($id  !== file_desc.$id) {
+      $id = makeNormalizedName($id, NameStyle.OBJECT)
+      if ($id !== file_desc.$id) {
          lib.log.warn(`Bundle '${file_desc.$id}' is normalized into '${$id}'`)
       }
    }
@@ -174,52 +176,78 @@ function make_library_bundle_manifest(lib: Library, file_desc?: Partial<BundleMa
    return manifest
 }
 
-async function discover_library(ws: Workspace, location: string) {
+enum Discovered {
+   None,
+   Ignored,
+   Registered,
+}
+
+async function discover_library(ws: Workspace, location: string, installed: boolean) {
    const lib_path = make_canonical_path(ws.path, location)
+   if (is_ignored_dir(ws, lib_path)) return Discovered.Ignored
+
+   const package_path = lib_path + "/package.json"
+   const manifest_path = findConfigFile(lib_path, "bundle.manifest")
+   if (!file.exists(package_path) && !file.exists(manifest_path)) return Discovered.None
+
    const lib_not_exists = ws.libraries.reduce((r, lib) => r && lib.path !== lib_path, true)
-   if (lib_not_exists) {
-      const lib_desc = await readJsonFile(lib_path + "/package.json") as PackageDescriptor
-      const bundle_result = await readSingletonConfigFile(lib_path, "bundle.component")
-      const bundle_desc = bundle_result?.data
-      if (bundle_desc || lib_desc?.componentsContainer) {
-         const other = ws.get_library(lib_desc.name)
-         if (other) {
-            if (lib_path.includes(other.path)) {
-               ws.log.info(`ignore library build at ${lib_path}`)
-               return
-            }
-            else {
-               throw new Error(`library '${lib_desc.name}' declared multiple times\n - ${other.path}\n - ${lib_path}`)
-            }
+   if (!lib_not_exists) return Discovered.Ignored
+
+   const lib_desc = await readJsonFile<PackageDescriptor>(package_path)
+   if (!lib_desc?.name) return Discovered.Ignored
+
+   const manifest_desc = await readConfigFile<BundleManifest>(manifest_path)
+   if (manifest_desc || !installed) {
+      const other = ws.get_library(lib_desc.name)
+      if (other) {
+         if (lib_path.includes(other.path)) {
+            ws.log.info(`ignore library build at ${lib_path}`)
+            return Discovered.Ignored
          }
-
-         const lib = new Library(lib_desc.name, lib_path, lib_desc, ws)
-         ws.libraries.push(lib)
-
-         if (bundle_desc) {
-            setup_library_bundle(lib, bundle_desc)
+         else {
+            throw new Error(`library '${lib_desc.name}' declared multiple times\n - ${other.path}\n - ${lib_path}`)
          }
-
-         const lib_search_path = lib_path + "/node_modules"
-         if (Fs.existsSync(lib_search_path)) {
-            lib.search_directories.push(lib_search_path)
-         }
-
-         await discover_library_components(lib, lib_path)
       }
 
+      const lib = new Library(lib_desc.name, lib_path, lib_desc, ws, installed)
+      ws.libraries.push(lib)
+      ws.log.info(`+ 📚 library: ${installed ? "⏬" : "🐣"} ${lib.get_id()} (${make_relative_path(ws.path, location)})`)
+
+      // Setup library infos from bundle manifest
+      if (manifest_desc) {
+         setup_library_bundle(lib, manifest_desc)
+
+         // Analyze library deployment manifest (supports json/yaml/yml/toml, singleton)
+         for (const pub of manifest_desc.data.components) {
+            const fpath = lib_path + "/" + (pub.ref ?? pub.id)
+            await discover_component(lib, fpath)
+         }
+      }
+
+      // Setup node search directory
+      const lib_search_path = lib_path + "/node_modules"
+      if (Fs.existsSync(lib_search_path)) {
+         lib.search_directories.push(lib_search_path)
+      }
+
+      // Collect library declaration
+      await discover_library_components(lib, lib_path)
+
+      return Discovered.Registered
    }
+   return Discovered.None
 }
 
 async function discover_workspace_libraries(ws: Workspace) {
 
    async function walk(dir: string) {
-      await discover_library(ws, dir)
-      for (const entry of Fs.readdirSync(dir, { withFileTypes: true })) {
-         if (entry.name === "node_modules") continue
-         const fullPath = dir + "/" + entry.name
-         if (entry.isDirectory()) {
-            await walk(fullPath)
+      if (await discover_library(ws, dir, false) === Discovered.None) {
+         for (const entry of Fs.readdirSync(dir, { withFileTypes: true })) {
+            if (entry.name === "node_modules") continue
+            const fullPath = dir + "/" + entry.name
+            if (entry.isDirectory()) {
+               await walk(fullPath)
+            }
          }
       }
    }
@@ -263,7 +291,7 @@ export async function discover_workspace(ws: Workspace): Promise<Workspace> {
 
    await discover_workspace_libraries(ws)
    for (const location in package_lock.packages) {
-      await discover_library(ws, location)
+      await discover_library(ws, location, true)
    }
 
    for (const bun of ws.bundles) {

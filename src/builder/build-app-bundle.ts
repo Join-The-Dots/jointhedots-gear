@@ -38,6 +38,9 @@ export function create_bundle_target(opts: {
    const target = new BuildTarget(bundle.id, storage, lib.workspace, opts.devmode == true, opts.watch == true, opts.clean == true)
    const manifs = create_manifests(lib, bundle, opts.version)
 
+   // Prepare esm setup
+   target.esmodules.set_root(lib.path)
+
    // Add bundle package.json
    target.assets.add_static_json("package.json", manifs.package)
 
@@ -45,10 +48,9 @@ export function create_bundle_target(opts: {
    target.tasks.push(new TypescriptDefinitionTask(target, lib))
 
    // Add bundle exporteds
-   const { esmodules } = target
    for (const exp_id in manifs.entries) {
       const exp = manifs.entries[exp_id]
-      esmodules.add_entry(exp.basename, exp.source)
+      target.esmodules.add_entry(exp.basename, exp.source)
    }
 
    // Add bundle content

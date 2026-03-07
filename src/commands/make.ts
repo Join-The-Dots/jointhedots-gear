@@ -76,7 +76,11 @@ export function command_make(): CommandModule<any, MakeOptions & {
             default: "./dist",
          }),
       handler: async (argv) => {
-         const ws = await open_workspace(argv.ws, argv.devmode)
+         const ws = await open_workspace({
+            workspace_path: argv.ws,
+            devmode: argv.devmode,
+            ignored_directory: Path.resolve(argv.dist),
+         })
          if (argv.devmode) ws.log.warn("Use devmode")
 
          let version = argv.versioned

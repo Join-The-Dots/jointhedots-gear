@@ -72,7 +72,7 @@ export function readConfigFileSync<T = any>(path: string): T | undefined {
  * Find config files matching a base name (e.g. "bundle.component") in a directory.
  * Returns all matching paths across supported extensions.
  */
-export function findConfigFiles(dir: string, baseName: string, fnames?: string[]): string[] {
+export function findConfigFile(dir: string, baseName: string, fnames?: string[]): string {
    const results: string[] = []
    for (const ext of config_extensions) {
       const fname = baseName + ext
@@ -85,7 +85,11 @@ export function findConfigFiles(dir: string, baseName: string, fnames?: string[]
          results.push(`${dir}/${fname}`)
       }
    }
-   return results
+   if (results.length === 0) return undefined
+   if (results.length > 1) {
+      throw new Error(`Multiple config files found for '${baseName}': ${results.join(", ")}. Only one format is allowed.`)
+   }
+   return results[0]
 }
 
 /**
@@ -94,11 +98,7 @@ export function findConfigFiles(dir: string, baseName: string, fnames?: string[]
  * Returns `undefined` if no matching file exists.
  */
 export async function readSingletonConfigFile<T = any>(dir: string, baseName: string, fnames?: string[]): Promise<{ data: T, path: string } | undefined> {
-   const paths = findConfigFiles(dir, baseName, fnames)
-   if (paths.length === 0) return undefined
-   if (paths.length > 1) {
-      throw new Error(`Multiple config files found for '${baseName}': ${paths.join(", ")}. Only one format is allowed.`)
-   }
-   const data = await readConfigFile<T>(paths[0])
-   return data !== undefined ? { data, path: paths[0] } : undefined
+   const path = findConfigFile(dir, baseName, fnames)
+   const data = await readConfigFile<T>(path)
+   return data !== undefined ? { data, path } : undefined
 }

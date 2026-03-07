@@ -27,11 +27,13 @@ export function create_library_target(opts: {
    const target = new BuildTarget(lib.name, opts.storage, lib.workspace, opts.devmode == true, opts.watch == true, opts.clean == true)
    const manifs = create_manifests(lib, lib.bundle, opts.version)
 
+   // Prepare esm setup
+   target.esmodules.set_root(lib.path)
+
    // Add bundle exporteds
-   const { esmodules } = target
    for (const exp_id in manifs.entries) {
       const exp = manifs.entries[exp_id]
-      esmodules.add_entry(exp.basename, exp.source)
+      target.esmodules.add_entry(exp.basename, exp.source)
    }
 
    // Add library types.d.ts

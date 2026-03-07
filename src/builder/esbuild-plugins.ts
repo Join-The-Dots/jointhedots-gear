@@ -12,6 +12,18 @@ import { Library } from "../model/workspace.ts"
 
 const VirtualOutDir = Path.normalize('X:/')
 
+function getEsbuildLogLevel(mode: "normal" | "debug" | "verbose"): esbuild.LogLevel {
+   switch (mode) {
+      case "verbose":
+         return "debug"
+      case "debug":
+         return "info"
+      case "normal":
+      default:
+         return "silent"
+   }
+}
+
 export async function create_esbuild_context(
    task: ESModulesTask,
    devmode: boolean,
@@ -50,6 +62,8 @@ export async function create_esbuild_context(
       return result
    }
 
+   const tsconfig = new TSConfig(task.rootPath, ws.path)
+
    const modules_mapping: ESModuleResolverOptions = {
       task,
       routeds: {
@@ -86,13 +100,14 @@ export async function create_esbuild_context(
       format: 'esm',
       target: 'es2022',
       platform: "browser",
+      tsconfig: tsconfig.configFile ?? undefined,
       sourcemap: devmode ? "linked" : false,
       minify: devmode ? false : true,
       bundle: true,
       splitting: true,
       treeShaking: true,
       write: false,
-      logLevel: (process.env.ESBUILD_LOG_LEVEL as esbuild.LogLevel) || 'silent',
+      logLevel: getEsbuildLogLevel(ws.logger.mode),
       chunkNames: "chunk.[hash]",
       jsx: "automatic",
       jsxImportSource: "react",
@@ -106,8 +121,8 @@ export async function create_esbuild_context(
          ...workspace_constants,
       },
       plugins: [
+         ESModuleResolverPlugin(modules_mapping, tsconfig),
          ...task.plugins,
-         ESModuleResolverPlugin(modules_mapping),
          StyleSheetPlugin(task),
          StoragePlugin(task),
       ],
@@ -273,11 +288,10 @@ export function StoragePlugin(task: ESModulesTask): esbuild.Plugin {
    return {
       name: "dipatch-files",
       setup: (build) => {
-         var buildStartTime: number = 0
+         let buildStartTime: number = 0
          build.onStart(() => {
             task.log.clear()
-            task.log.info("Build started...")
-            buildStartTime = performance.now()
+            buildStartTime = Date.now()
          })
          build.onEnd(async (result) => {
             if (result.errors.length > 0) {
@@ -290,7 +304,7 @@ export function StoragePlugin(task: ESModulesTask): esbuild.Plugin {
                task.log.warn(warning)
             }
             if (result.outputFiles) {
-               const storeStart = performance.now()
+               const storeStart = Date.now()
                const tx = task.target.edit()
                for (const file of result.outputFiles) {
                   if (file.path.startsWith(VirtualOutDir)) {
@@ -304,9 +318,9 @@ export function StoragePlugin(task: ESModulesTask): esbuild.Plugin {
                }
                task.target.store()
 
-               const storeTime = (performance.now() - storeStart) / 1000
-               const buildTime = (performance.now() - buildStartTime) / 1000
-               task.log.info(`Build completed with ${result.outputFiles.length} file(s) in ${buildTime.toFixed(2)}s (store: ${storeTime.toFixed(2)}s)`)
+               const storeTime = (Date.now() - storeStart) / 1000
+               const buildTime = (Date.now() - buildStartTime) / 1000
+               task.log.info(`Build ES modules in ${result.outputFiles.length} file(s) (compile: ${buildTime.toFixed(2)}s, store: ${storeTime.toFixed(2)}s)`)
             }
             return null
          })
@@ -424,7 +438,7 @@ export function DependencyDeduplicationPlugin(libraries: Library[], rootNodeModu
             if (!singletonCache.has(pkg)) {
                const is = isSingletonPackage(result.path, pkg)
                singletonCache.set(pkg, is)
-               if (is) log.info(`[dedup] singleton: ${pkg}`)
+               if (is) log.debug(`[dedup] singleton: ${pkg}`)
             }
 
             // Singleton → force root resolution
@@ -450,7 +464,65 @@ export function DependencyDeduplicationPlugin(libraries: Library[], rootNodeModu
    }
 }
 
-export function ESModuleResolverPlugin(opts: ESModuleResolverOptions): esbuild.Plugin {
+/**
+ * Parses tsconfig.json compilerOptions (paths + baseUrl) and exposes resolved alias patterns.
+ * Looks for tsconfig.json in libraryPath first, then workspacePath as fallback.
+ */
+export class TSConfig {
+   readonly baseUrl: string | null = null
+   readonly patterns: [string, string][] = []
+   readonly configFile: string | null = null
+   readonly configData: any = null
+
+   constructor(libraryPath: string, workspacePath: string) {
+      const tsconfigFile = [libraryPath, workspacePath]
+         .filter(Boolean)
+         .map(dir => Path.join(dir, 'tsconfig.json'))
+         .find(f => Fs.existsSync(f))
+      if (!tsconfigFile) return
+
+      try {
+         const raw = Fs.readFileSync(tsconfigFile, 'utf-8')
+         const cleaned = raw.replace(/^\s*\/\/.*$/gm, '').replace(/,\s*([}\]])/g, '$1')
+         const tsconfig = JSON.parse(cleaned)
+         const opts = tsconfig.compilerOptions
+         if (!opts?.paths) return
+
+         this.configData = tsconfig
+         this.configFile = tsconfigFile
+         this.baseUrl = Path.resolve(Path.dirname(tsconfigFile), opts.baseUrl || '.')
+         for (const [alias, targets] of Object.entries<string[]>(opts.paths)) {
+            for (const target of targets) {
+               const prefix = alias === '*' ? '' : alias.endsWith('/*') ? alias.slice(0, -2) : alias
+               const targetPath = target.endsWith('/*') ? target.slice(0, -2) : target
+               this.patterns.push([prefix, Path.resolve(this.baseUrl, targetPath)])
+            }
+         }
+      } catch { }
+   }
+
+   get hasAliases(): boolean {
+      return this.patterns.length > 0
+   }
+
+   /** Resolve an import path against tsconfig path aliases. Returns the resolved file path or null. */
+   resolve(importPath: string, resolveFilePath: (importPath: string, baseDir: string) => string | null): string | null {
+      for (const [prefix, dir] of this.patterns) {
+         if (prefix === '') {
+            // Wildcard "*" pattern: try resolving the full import path under the target dir
+            const resolved = resolveFilePath('./' + importPath, dir)
+            if (resolved) return resolved
+         } else if (importPath === prefix || importPath.startsWith(prefix + '/')) {
+            const rest = importPath.slice(prefix.length)
+            const resolved = resolveFilePath('.' + rest, dir)
+            if (resolved) return resolved
+         }
+      }
+      return null
+   }
+}
+
+export function ESModuleResolverPlugin(opts: ESModuleResolverOptions, tsconfigPaths?: TSConfig): esbuild.Plugin {
 
    const internalLoaders: Record<string, esbuild.Loader> = {
       ".ts": "ts", ".tsx": "tsx", ".js": "js", ".jsx": "jsx",
@@ -528,6 +600,14 @@ export function ESModuleResolverPlugin(opts: ESModuleResolverOptions): esbuild.P
             if (args.path.startsWith(".") || args.path.startsWith("/") || Path.isAbsolute(args.path)) {
                const baseDir = args.resolveDir || workspaceRoot
                const resolved = resolveFilePath(args.path, baseDir)
+               if (resolved) {
+                  return { path: resolved, namespace: "file" }
+               }
+            }
+
+            // 4. Resolve tsconfig path aliases (e.g. @app/* -> ./src/*)
+            if (tsconfigPaths?.hasAliases) {
+               const resolved = tsconfigPaths.resolve(args.path, resolveFilePath)
                if (resolved) {
                   return { path: resolved, namespace: "file" }
                }

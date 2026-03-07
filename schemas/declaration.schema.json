@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/declaration-descriptor.schema.json",
+  "title": "DeclarationDescriptor",
+  "description": "Declaration descriptor used by jointhedots-gear library discovery and build flow.",
+  "type": "object",
+  "properties": {
+    "selectors": {
+      "type": "array",
+      "description": "Optional selectors used to include this descriptor for matching build options.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "assets": {
+      "type": "array",
+      "description": "Optional assets to integrate into package output.",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "Asset path string."
+          },
+          {
+            "type": "object",
+            "description": "Mapped asset with source and destination paths.",
+            "properties": {
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "exports": {
+      "type": "object",
+      "description": "Map of package export paths to export definitions.",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "Shorthand export target."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "import": {
+                "type": "string"
+              },
+              "require": {
+                "type": "string"
+              },
+              "default": {
+                "type": "string"
+              },
+              "types": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      }
+    }
+  },
+  "additionalProperties": false
+}

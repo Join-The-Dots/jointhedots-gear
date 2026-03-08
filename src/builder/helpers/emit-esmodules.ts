@@ -5,10 +5,13 @@ import MIME from 'mime'
 import postcss from 'postcss'
 import * as esbuild from 'esbuild'
 import { sassPlugin } from 'esbuild-sass-plugin'
-import { ESModulesTask } from "./build-target.ts"
-import { PackageRootDir } from "../utils/file.ts"
-import type { Log } from "../model/helpers/logger.ts"
-import { Library } from "../model/workspace.ts"
+import { PackageRootDir, resolve_normalized_suffixed_path } from "../../utils/file.ts"
+import type { Log } from "../../model/helpers/logger.ts"
+import { Library } from "../../model/workspace.ts"
+import { computeNameHashID } from "../../utils/normalized-name.ts"
+import type { ResourceEntry } from "../../model/component.ts"
+import type { IStorageTransaction } from "../../model/storage.ts"
+import { BuildTask } from "./task.ts"
 
 const VirtualOutDir = Path.normalize('X:/')
 
@@ -529,35 +532,6 @@ export function ESModuleResolverPlugin(opts: ESModuleResolverOptions, tsconfigPa
       ".json": "json", ".txt": "text", ".md": "text", ".css": "css",
    }
 
-
-   const FILE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.json']
-
-   /** Resolve a file path with extension probing */
-   function resolveFilePath(importPath: string, baseDir: string): string | null {
-      const resolved = Path.resolve(baseDir, importPath)
-
-      // Check if exact path exists
-      if (Fs.existsSync(resolved) && Fs.statSync(resolved).isFile()) {
-         return resolved
-      }
-
-      // Try with common extensions
-      for (const ext of FILE_EXTENSIONS) {
-         const withExt = resolved + ext
-         if (Fs.existsSync(withExt)) return withExt
-      }
-
-      // Try index files in directory
-      if (Fs.existsSync(resolved) && Fs.statSync(resolved).isDirectory()) {
-         for (const ext of FILE_EXTENSIONS) {
-            const indexPath = Path.join(resolved, `index${ext}`)
-            if (Fs.existsSync(indexPath)) return indexPath
-         }
-      }
-
-      return null
-   }
-
    return {
       name: 'esm-resolver',
       setup(build) {
@@ -599,7 +573,7 @@ export function ESModuleResolverPlugin(opts: ESModuleResolverOptions, tsconfigPa
             // 3. Handle relative/absolute file paths (entry points and local imports)
             if (args.path.startsWith(".") || args.path.startsWith("/") || Path.isAbsolute(args.path)) {
                const baseDir = args.resolveDir || workspaceRoot
-               const resolved = resolveFilePath(args.path, baseDir)
+               const resolved = resolve_normalized_suffixed_path(baseDir, args.path)
                if (resolved) {
                   return { path: resolved, namespace: "file" }
                }
@@ -607,7 +581,9 @@ export function ESModuleResolverPlugin(opts: ESModuleResolverOptions, tsconfigPa
 
             // 4. Resolve tsconfig path aliases (e.g. @app/* -> ./src/*)
             if (tsconfigPaths?.hasAliases) {
-               const resolved = tsconfigPaths.resolve(args.path, resolveFilePath)
+               const resolved = tsconfigPaths.resolve(args.path, (importPath, baseDir) => {
+                  return resolve_normalized_suffixed_path(baseDir, importPath)
+               })
                if (resolved) {
                   return { path: resolved, namespace: "file" }
                }
@@ -626,5 +602,71 @@ export function ESModuleResolverPlugin(opts: ESModuleResolverOptions, tsconfigPa
             return { contents, loader, resolveDir: workspaceRoot }
          })
       },
+   }
+}
+
+export class ESModulesTask extends BuildTask {
+   entries: { [url: string]: string } = {}
+   imports: { [file: string]: string } = {}
+   internals = new Map<string, string>()
+
+   plugins: esbuild.Plugin[] = []
+   context: esbuild.BuildContext = null
+   transaction: IStorageTransaction = null
+   polyfilled: boolean = true
+   rootPath: string = null
+
+   set_root(path: string) {
+      this.rootPath = path
+   }
+
+   add_entry(name: string, path: string) {
+      this.entries[name] = path
+      this.imports[path] = name
+   }
+   add_entry_typescript(code: string, name?: string): string {
+      const id = computeNameHashID(code)
+      if (!name) name = id
+      this.internals.set(id, code)
+      this.add_entry(name, id)
+      return name
+   }
+   add_resource_entry(resource: ResourceEntry, baseDir: string, library: Library): ResourceEntry {
+      if (typeof resource === "string") {
+         const parts = resource.split("#")
+         const file = library.resolve_entry_path(parts[0], baseDir)
+         if (file) {
+            let named = this.imports[file]
+            if (!named) {
+               named = library.make_file_id("lambda", file)
+               this.add_entry(named, file)
+            }
+            return `./${named}.js#${parts[1] || "default"}`
+         }
+         else {
+            throw new Error(`${library.name}: Cannot resolve file: ${parts[0]}`)
+         }
+      }
+      else {
+         return resource
+      }
+   }
+   async execute() {
+      if (this.context) {
+         const prev_ctx = this.context
+         this.context = null
+         await prev_ctx.dispose()
+      }
+
+      const { target } = this
+      this.context = await create_esbuild_context(this, target.devmode)
+
+      if (target.watch) {
+         await this.context.watch()
+      }
+      else {
+         await this.context.rebuild()
+         await this.context.dispose()
+      }
    }
 }

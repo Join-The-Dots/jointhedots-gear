@@ -1,24 +1,24 @@
 import Path from "path"
-import fs from "fs"
+import Fs from "fs"
 import { fileURLToPath } from "url"
 
 export const PackageRootDir = Path.resolve(fileURLToPath(import.meta.url), "../../..")
 
 export const file = {
   exists(path: string): boolean {
-    return fs.existsSync(path) && fs.lstatSync(path).isFile()
+    return Fs.existsSync(path) && Fs.lstatSync(path).isFile()
   },
   copy: {
     toFile(src: string, dest: string): string {
       dest = Path.resolve(dest)
       directory.make(Path.dirname(dest))
-      fs.copyFileSync(src, dest)
+      Fs.copyFileSync(src, dest)
       return dest
     },
     toDir(src: string, dest: string) {
       dest = Path.resolve(dest, Path.basename(src))
       directory.make(Path.dirname(dest))
-      fs.copyFileSync(src, dest)
+      Fs.copyFileSync(src, dest)
       return dest
     }
   },
@@ -26,36 +26,36 @@ export const file = {
     toFile(src: string, dest: string) {
       dest = Path.resolve(dest)
       directory.make(Path.dirname(dest))
-      fs.copyFileSync(src, dest)
-      fs.unlinkSync(src)
+      Fs.copyFileSync(src, dest)
+      Fs.unlinkSync(src)
       return dest
     },
     toDir(src: string, dest: string) {
       dest = Path.resolve(dest, Path.basename(src))
       directory.make(Path.dirname(dest))
-      fs.copyFileSync(src, dest)
-      fs.unlinkSync(src)
+      Fs.copyFileSync(src, dest)
+      Fs.unlinkSync(src)
       return dest
     },
   },
   read: {
     json(path: string) {
-      try { return JSON.parse(fs.readFileSync(path).toString()) }
+      try { return JSON.parse(Fs.readFileSync(path).toString()) }
       catch (e) { return undefined }
     },
     text(path: string) {
-      try { return fs.readFileSync(path).toString() }
+      try { return Fs.readFileSync(path).toString() }
       catch (e) { return undefined }
     }
   },
   write: {
     json(path: string, data: any) {
       directory.make(Path.dirname(path))
-      fs.writeFileSync(path, JSON.stringify(data, null, 2))
+      Fs.writeFileSync(path, JSON.stringify(data, null, 2))
     },
     text(path: string, data: string) {
       directory.make(Path.dirname(path))
-      fs.writeFileSync(path, Array.isArray(data) ? data.join("\n") : data.toString())
+      Fs.writeFileSync(path, Array.isArray(data) ? data.join("\n") : data.toString())
     }
   },
   find: {
@@ -63,32 +63,32 @@ export const file = {
       let previous, current = Path.resolve(base)
       do {
         previous = current
-        if (fs.existsSync(Path.join(current, subpath))) return current
+        if (Fs.existsSync(Path.join(current, subpath))) return current
         current = Path.dirname(current)
       } while (current != previous)
     }
   },
   remove(path: string) {
-    if (fs.existsSync(path)) {
-      fs.unlinkSync(path)
+    if (Fs.existsSync(path)) {
+      Fs.unlinkSync(path)
     }
   },
 }
 
 export const directory = {
   exists(path: string): boolean {
-    return fs.existsSync(path) && fs.lstatSync(path).isDirectory()
+    return Fs.existsSync(path) && Fs.lstatSync(path).isDirectory()
   },
   filenames(path: string, recursive?: Boolean): string[] {
     try {
       if (recursive) {
 
         function* walkSync(dir: string) {
-          const files = fs.readdirSync(dir)
+          const files = Fs.readdirSync(dir)
 
           for (const file of files) {
             const pathToFile = Path.join(dir, file)
-            const isDirectory = fs.statSync(pathToFile).isDirectory()
+            const isDirectory = Fs.statSync(pathToFile).isDirectory()
             if (isDirectory) {
               yield* walkSync(pathToFile)
             } else {
@@ -103,15 +103,15 @@ export const directory = {
         }
         return _Result
       }
-      else return fs.readdirSync(path) || []
+      else return Fs.readdirSync(path) || []
     }
     catch (e) { return [] }
   },
-  copy(src: string, dest: string, filter?: (name: string, path: string, stats: fs.Stats) => boolean) {
+  copy(src: string, dest: string, filter?: (name: string, path: string, stats: Fs.Stats) => boolean) {
     if (directory.exists(src)) {
-      for (const name of fs.readdirSync(src)) {
+      for (const name of Fs.readdirSync(src)) {
         const path = Path.join(src, name)
-        const stats = fs.lstatSync(path)
+        const stats = Fs.lstatSync(path)
         const destination = Path.join(dest, name)
         if (stats.isDirectory()) {
           directory.copy(path, destination, filter)
@@ -123,15 +123,15 @@ export const directory = {
     }
   },
   make(path: string) {
-    if (path && !fs.existsSync(path)) {
-      fs.mkdirSync(path, { recursive: true })
+    if (path && !Fs.existsSync(path)) {
+      Fs.mkdirSync(path, { recursive: true })
     }
   },
   remove(path: string, onlyInner?: boolean) {
-    if (fs.existsSync(path) && fs.lstatSync(path).isDirectory()) {
-      fs.readdirSync(path).forEach(function (entry) {
+    if (Fs.existsSync(path) && Fs.lstatSync(path).isDirectory()) {
+      Fs.readdirSync(path).forEach(function (entry) {
         var entry_path = Path.join(path, entry)
-        if (fs.lstatSync(entry_path).isDirectory()) {
+        if (Fs.lstatSync(entry_path).isDirectory()) {
           directory.remove(entry_path)
         }
         else {
@@ -140,7 +140,7 @@ export const directory = {
         }
       })
       if (!onlyInner) {
-        fs.rmdirSync(path)
+        Fs.rmdirSync(path)
       }
     }
   },
@@ -171,11 +171,39 @@ export function make_normalized_dirname(baseDir: string, ...path: string[]): str
 export function make_canonical_path(baseDir: string, ...path: string[]): string {
   let targetPath = Path.resolve(baseDir, ...path)
   try {
-    const stats = fs.lstatSync(targetPath)
+    const stats = Fs.lstatSync(targetPath)
     if (stats.isSymbolicLink()) {
-      targetPath = fs.readlinkSync(targetPath)
+      targetPath = Fs.readlinkSync(targetPath)
     }
   }
   catch (err) { }
   return make_normalized_path(targetPath)
+}
+
+const FILE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.json']
+
+/** Resolve a file path with extension probing */
+export function resolve_normalized_suffixed_path(baseDir: string, path: string, exts = FILE_EXTENSIONS): string | null {
+  const resolved = make_normalized_path(baseDir, path)
+
+  // Check if exact path exists
+  if (Fs.existsSync(resolved) && Fs.statSync(resolved).isFile()) {
+    return resolved
+  }
+
+  // Try with common extensions
+  for (const ext of exts) {
+    const withExt = resolved + ext
+    if (Fs.existsSync(withExt)) return withExt
+  }
+
+  // Try index files in directory
+  if (Fs.existsSync(resolved) && Fs.statSync(resolved).isDirectory()) {
+    for (const ext of exts) {
+      const indexPath = make_normalized_path(resolved, `index${ext}`)
+      if (Fs.existsSync(indexPath)) return indexPath
+    }
+  }
+
+  return null
 }

@@ -1,6 +1,7 @@
 import Path from "node:path"
 import { makeComponentPublication, type BundleManifest, type ComponentPublication } from "../component.ts"
 import type { Bundle, Library, PackageDescriptor } from "../workspace.ts"
+import { resolve_normalized_suffixed_path } from "../../utils/file.ts"
 
 export type ExportEntry = {
    id: string
@@ -15,7 +16,7 @@ function add_export_entry(exports: ExportEntries, lib: Library, key: string, val
    const basename = key.startsWith("./") ? key.slice(2) : key
    const filename = lib.make_file_id("export", basename)
    const source_ref = typeof value === "string" ? value : value?.import ?? value?.default ?? value?.require
-   const entry = source_ref ? lib.resolve_entry_path(source_ref, baseDir) : null
+   const entry = source_ref ? resolve_normalized_suffixed_path(lib.resolve_entry_path(source_ref, baseDir), ".") : null
    const id = `${lib.name}${basename === "." ? "" : "/" + basename}`
    exports[id] = {
       id,
@@ -26,7 +27,7 @@ function add_export_entry(exports: ExportEntries, lib: Library, key: string, val
    }
 }
 
-function create_export_map(lib: Library, bun: Bundle): ExportEntries {
+export function create_export_map(lib: Library, bun: Bundle): ExportEntries {
    const exports: ExportEntries = {}
 
    if (bun) {
@@ -57,34 +58,31 @@ function create_export_map(lib: Library, bun: Bundle): ExportEntries {
    return exports
 }
 
-export function create_manifests(lib: Library, bun: Bundle, build_version?: string): {
-   package: PackageDescriptor,
-   bundle: BundleManifest,
-   entries: ExportEntries
-} {
+export function create_bundle_manifest(lib: Library, bun: Bundle): BundleManifest {
+   if (!bun) return null
    const entries = create_export_map(lib, bun)
+   const bundle_manif = bun.manifest
 
-   let bundle_manif: BundleManifest = null
-   if (bun) {
-      bundle_manif = bun.manifest
-
-      const components: ComponentPublication[] = []
-      for (const comp of bun.components.values()) {
-         components.push(makeComponentPublication(comp))
-      }
-
-      bundle_manif.data = {
-         baseline: bun.id + "-v0",
-         components: components,
-         exports: {},
-      }
-      for (const id in entries) {
-         const exp = entries[id]
-         bundle_manif.data.exports[id] = exp.filename
-      }
+   const components: ComponentPublication[] = []
+   for (const comp of bun.components.values()) {
+      components.push(makeComponentPublication(comp))
    }
 
-   // Add bundle package.json 
+   bundle_manif.data = {
+      baseline: bun.id + "-v0",
+      components: components,
+      exports: {},
+   }
+   for (const id in entries) {
+      const exp = entries[id]
+      bundle_manif.data.exports[id] = exp.filename
+   }
+   return bundle_manif
+}
+
+export function create_package_manifest(lib: Library, bun: Bundle, build_version?: string): PackageDescriptor {
+   const entries = create_export_map(lib, bun)
+
    const pkg_manif = {
       ...lib.descriptor,
       name: lib.name,
@@ -97,13 +95,32 @@ export function create_manifests(lib: Library, bun: Bundle, build_version?: stri
       optionalDependencies: undefined,
    } as PackageDescriptor
 
+   if (pkg_manif.dependencies) {
+      const resolved = lib.workspace.resolved_versions
+      for (const dep in pkg_manif.dependencies) {
+         if (pkg_manif.dependencies[dep] === "*") {
+            const dep_resolved = resolved[dep]
+            if (dep_resolved) {
+               const [major, minor] = dep_resolved.split(".")
+               pkg_manif.dependencies[dep] = `^${major}.${minor}.0`
+            }
+            else {
+               lib.log.warn(`Library dependency '${dep}' is versioned as * but not updatable to locked version`)
+            }
+         }
+      }
+   }
+
    for (const id in entries) {
       const exp = entries[id]
       if (exp.exported) {
          if (!pkg_manif.exports) pkg_manif.exports = {}
-         pkg_manif.exports[exp.exported] = { import: `./${exp.filename}`, types: "./types.d.ts" }
+         pkg_manif.exports[exp.exported] = {
+            import: `./${exp.filename}`,
+            types: "./types.d.ts",
+         }
       }
    }
 
-   return { package: pkg_manif, bundle: bundle_manif, entries }
+   return pkg_manif
 }

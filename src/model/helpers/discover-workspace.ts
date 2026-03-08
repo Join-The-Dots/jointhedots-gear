@@ -3,7 +3,7 @@ import Fsp from "node:fs/promises"
 import { readJsonFile } from "../storage.ts"
 import { checkComponentManifest, type BundleManifest, type ComponentManifest } from "../component.ts"
 import { makeNormalizedName, NameStyle } from "../../utils/normalized-name.ts"
-import { create_manifests } from "./create-manifests.ts"
+import { create_bundle_manifest } from "./create-manifests.ts"
 import { Bundle, Library, Workspace, type AppDescriptor, type DeclarationDescriptor, type PackageDescriptor } from "../workspace.ts"
 import { file, make_canonical_path, make_normalized_dirname, make_normalized_path, make_relative_path } from "../../utils/file.ts"
 import { findConfigFile, is_config_filename, readConfigFile, readSingletonConfigFile } from "./config-loader.ts"
@@ -21,8 +21,8 @@ function is_ignored_dir(ws: Workspace, path: string): boolean {
 }
 
 function setup_library_bundle(lib: Library, bundle_desc?: any) {
-   const manif = make_library_bundle_manifest(lib, bundle_desc)
    const ws = lib.workspace
+   const manif = make_library_bundle_manifest(lib, bundle_desc)
    let bun = ws.get_bundle(manif.$id)
    if (!bun) {
       bun = new Bundle(manif, lib.path, ws, lib)
@@ -124,6 +124,17 @@ async function discover_library_components(lib: Library, path: string, subdir: b
    }
 }
 
+export function collect_declarations_field(lib: Library, key: string, value: any) {
+   for (const decl of lib.declarations.values()) {
+      if (typeof decl[key] === typeof value) {
+         if (Array.isArray(value)) value.push(...decl[key])
+         else if (typeof value === "object") Object.assign(value, decl[key])
+         else value = decl[key]
+      }
+   }
+   return value
+}
+
 function make_library_bundle_manifest(lib: Library, file_desc?: Partial<BundleManifest>): BundleManifest {
    let $id = file_desc?.$id
    if ($id) {
@@ -138,25 +149,23 @@ function make_library_bundle_manifest(lib: Library, file_desc?: Partial<BundleMa
    }
 
    const data: BundleManifest["data"] = {
-      alias: lib.name,
       package: lib.get_id(),
-      namespaces: [],
-      dependencies: [],
-      redistribueds: {},
+      alias: collect_declarations_field(lib, "alias", lib.name),
+      namespaces: collect_declarations_field(lib, "namespaces", []),
+      dependencies: collect_declarations_field(lib, "dependencies", []),
+      distribueds: collect_declarations_field(lib, "distribueds", {}),
    }
 
    if (file_desc?.data) {
       data.alias = file_desc.data.alias ?? data.alias
-      if (file_desc.data.redistribueds) {
-         const distribueds = file_desc.data.redistribueds
-         if (Array.isArray(distribueds)) distribueds.forEach(dist => data.redistribueds[dist] = "*")
-         else Object.assign(data.redistribueds, distribueds)
+      if (file_desc.data.distribueds) {
+         Object.assign(data.distribueds, file_desc.data.distribueds)
       }
-      if (file_desc.data.namespaces) {
-         data.namespaces = file_desc.data.namespaces
+      if (Array.isArray(file_desc.data.namespaces)) {
+         data.namespaces.push(...file_desc.data.namespaces)
       }
-      if (file_desc.data.dependencies) {
-         data.dependencies = file_desc.data.dependencies
+      if (Array.isArray(file_desc.data.dependencies)) {
+         data.dependencies.push(...file_desc.data.dependencies)
       }
    }
 
@@ -198,6 +207,7 @@ async function discover_library(ws: Workspace, location: string, installed: bool
 
    const manifest_desc = await readConfigFile<BundleManifest>(manifest_path)
    if (manifest_desc || !installed) {
+
       const other = ws.get_library(lib_desc.name)
       if (other) {
          if (lib_path.includes(other.path)) {
@@ -214,10 +224,10 @@ async function discover_library(ws: Workspace, location: string, installed: bool
       ws.log.info(`+ 📚 library: ${installed ? "⏬" : "🐣"} ${lib.get_id()} (${make_relative_path(ws.path, location)})`)
 
       // Setup library infos from bundle manifest
-      if (manifest_desc) {
-         setup_library_bundle(lib, manifest_desc)
+      setup_library_bundle(lib, manifest_desc)
 
-         // Analyze library deployment manifest (supports json/yaml/yml/toml, singleton)
+      // Analyze library deployment manifest (supports json/yaml/yml/toml, singleton)
+      if (manifest_desc?.data?.components) {
          for (const pub of manifest_desc.data.components) {
             const fpath = lib_path + "/" + (pub.ref ?? pub.id)
             await discover_component(lib, fpath)
@@ -289,6 +299,17 @@ export async function discover_workspace(ws: Workspace): Promise<Workspace> {
       throw new Error(`Package lock not found for '${ws.name}'`)
    }
 
+   for (const location in package_lock.packages) {
+      let pkg = package_lock.packages[location]
+      if (location.startsWith("node_modules/")) {
+         if (pkg.link) {
+            pkg = package_lock.packages[pkg.resolved]
+         }
+         const name = location.replace(/^.*node_modules\//, "")
+         ws.resolved_versions[name] = pkg.version
+      }
+   }
+
    await discover_workspace_libraries(ws)
    for (const location in package_lock.packages) {
       await discover_library(ws, location, true)
@@ -296,8 +317,7 @@ export async function discover_workspace(ws: Workspace): Promise<Workspace> {
 
    for (const bun of ws.bundles) {
       if (bun.source) {
-         const manifs = create_manifests(bun.source, bun)
-         bun.manifest = manifs.bundle
+         bun.manifest = create_bundle_manifest(bun.source, bun)
       }
    }
 

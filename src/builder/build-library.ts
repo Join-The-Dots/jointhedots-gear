@@ -1,10 +1,12 @@
-import { Library, type PackageDescriptor } from "../model/workspace.ts"
-import { StorageFiles } from "../model/storage.ts"
-import ChildProcess from "child_process"
-import { BuildTarget, BundleManifestTask } from "./build-target.ts"
-import { TypescriptDefinitionTask } from "./emit-dts.ts"
 import Path from "node:path"
-import { create_manifests } from "../model/helpers/create-manifests.ts"
+import ChildProcess from "child_process"
+import { Library } from "../model/workspace.ts"
+import { StorageFiles } from "../model/storage.ts"
+import { BuildTarget } from "./build-target.ts"
+import { TypescriptDefinitionTask } from "./helpers/emit-typescript-definition.ts"
+import { PackageManifestTask } from "./helpers/emit-package-manifest.ts"
+import { create_export_map } from "../model/helpers/create-manifests.ts"
+import { BundleManifestTask } from "./helpers/emit-bundle-manifest.ts"
 
 export type BuildLibraryOptions = {
    library: Library
@@ -25,14 +27,14 @@ export function create_library_target(opts: {
 }): BuildTarget {
    const lib = opts.library
    const target = new BuildTarget(lib.name, opts.storage, lib.workspace, opts.devmode == true, opts.watch == true, opts.clean == true)
-   const manifs = create_manifests(lib, lib.bundle, opts.version)
 
    // Prepare esm setup
    target.esmodules.set_root(lib.path)
 
    // Add bundle exporteds
-   for (const exp_id in manifs.entries) {
-      const exp = manifs.entries[exp_id]
+   const entries = create_export_map(lib, lib.bundle)
+   for (const exp_id in entries) {
+      const exp = entries[exp_id]
       target.esmodules.add_entry(exp.basename, exp.source)
    }
 
@@ -40,7 +42,7 @@ export function create_library_target(opts: {
    target.tasks.push(new TypescriptDefinitionTask(target, lib))
 
    // Add library package.json
-   target.assets.add_static_json("package.json", manifs.package)
+   target.tasks.push(new PackageManifestTask(target, lib, opts.version))
 
    // Add bundle content
    const { bundle } = lib

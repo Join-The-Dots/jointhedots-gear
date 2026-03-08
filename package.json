@@ -1,6 +1,6 @@
 {
    "name": "@jointhedots/gear",
-   "version": "1.1.12",
+   "version": "1.1.13",
    "type": "module",
    "bin": {
       "jointhedots-gear": "esm/cli.js"
@@ -19,6 +19,8 @@
       ":build:ui": "node --enable-source-maps --watch-path=esm esm/cli make --buns jointhedots.ui --ws ../jointhedots-core/packages/jointhedots-ui",
       ":build:cortex": "node --enable-source-maps --watch-path=esm esm/cli make --buns @jointhedots/cortex --devmode --ws ../jointhedots-core/packages/jointhedots-cortex",
       ":build:libs": "node --enable-source-maps --watch-path=esm esm/cli make --libs @jointhedots/core,@jointhedots/ui --devmode --ws ../jointhedots-core",
+      ":build:lib:core": "node --enable-source-maps --watch-path=esm esm/cli make --libs @jointhedots/core --devmode --ws ../jointhedots-core/packages/jointhedots-core",
+      ":build:lib:ui": "node --enable-source-maps --watch-path=esm esm/cli make --libs @jointhedots/ui --devmode --ws ../jointhedots-core/packages/jointhedots-ui",
       ":build:app": "node --enable-source-maps --watch-path=esm esm/cli make --apps playground:ui --ws ../jointhedots-core",
       "serve:mono": "node --enable-source-maps --watch-path=esm esm/cli serve --app playground:ui --devmode --port 3002 --ws ../jointhedots-core",
       "serve:host": "node --enable-source-maps --watch-path=esm esm/cli serve --app playground:ui:host  --port 3002 --ws ../jointhedots-core",

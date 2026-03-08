@@ -1,17 +1,15 @@
 import Fs from "node:fs"
-import Fsp from "node:fs/promises"
 import Path from "node:path"
 import Process from "node:process"
+import DotEnv from "dotenv"
 import { readJsonFile } from "./storage.ts"
 import { type BundleID, type BundleManifest, type ComponentManifest, type DistributedConfig } from "./component.ts"
-import { topologicalSort } from "../utils/graph-ordering.ts"
 import type { WebAppManifest } from "web-app-manifest"
-import DotEnv from "dotenv"
 import { computeNameHashID, makeNormalizedName, NameStyle } from "../utils/normalized-name.ts"
-import { make_relative_path } from "../utils/file.ts"
+import { make_normalized_path } from "../utils/file.ts"
 import { Logger, Log } from "./helpers/logger.ts"
 import { discover_workspace } from "./helpers/discover-workspace.ts"
-import { create_manifests } from "./helpers/create-manifests.ts"
+import { create_bundle_manifest } from "./helpers/create-manifests.ts"
 
 export type FileID = string
 export type ModuleID = string // Location of esm file: ./{module_path}
@@ -69,7 +67,7 @@ export type AppEntry = {
    path: string
 }
 
-export type DeclarationDescriptor = {
+export type DeclarationDescriptor = BundleManifest["data"] & {
    // List of tags used to define for what build options this desciptor shall be taken into account
    selectors?: string[]
 
@@ -164,13 +162,13 @@ export class Library extends WorkspaceItem {
       return base ? prefix + "." + base : prefix
    }
    resolve_entry_path(entryId: string, baseDir: string): string {
-      const fpath = make_relative_path(Process.cwd(), Path.resolve(baseDir, entryId))
+      const fpath = make_normalized_path(Path.resolve(baseDir, entryId))
       if (entryId.startsWith(".")) return fpath
 
       const parts = entryId.split("/")
       for (const search_path of this.search_directories) {
          if (Fs.existsSync(search_path + "/" + parts[0])) {
-            return make_relative_path(Process.cwd(), search_path + "/" + entryId)
+            return make_normalized_path(search_path + "/" + entryId)
          }
       }
 
@@ -206,8 +204,7 @@ export class Bundle extends WorkspaceItem {
    }
    resolve_export(ref: string): string {
       if (!this.manifest) {
-         const manifs = create_manifests(this.source, this)
-         this.manifest = manifs.bundle
+         this.manifest = create_bundle_manifest(this.source, this)
          this.configured = true
       }
       return this.exports?.[ref]
@@ -227,6 +224,7 @@ export class Workspace {
    bundles: Bundle[] = []
    libraries: Library[] = []
    constants: Constants = {}
+   resolved_versions: Record<string, string> = {}
    search_directories: string[] = []
    ignored_directories = new Set<string>()
    readonly logger = new Logger()

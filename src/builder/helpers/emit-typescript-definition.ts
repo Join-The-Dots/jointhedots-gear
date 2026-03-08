@@ -2,10 +2,12 @@ import * as Glob from 'glob'
 import Os from 'os'
 import Path from 'path'
 import Ts from 'typescript'
-import { BuildTarget, BuildTask } from './build-target.js'
-import { Library, type PackageExport } from '../model/workspace.js'
-import { file } from '../utils/file.js'
-import type { Log, Message } from '../model/helpers/logger.js'
+import { BuildTask } from "./task.ts"
+import { BuildTarget } from '../build-target.ts'
+import { Library } from '../../model/workspace.ts'
+import { file } from '../../utils/file.ts'
+import type { Log, Message } from '../../model/helpers/logger.ts'
+import { create_export_map, type ExportEntries } from '../../model/helpers/create-manifests.ts'
 
 const eol = Os.EOL
 const indent = "    "
@@ -173,7 +175,7 @@ export function generateTypescriptDefinition(options: {
    exclude: string[]
    externs?: string[]
    types?: string[]
-   exports: { [exportId: string]: PackageExport }
+   exports: ExportEntries
    includes?: string[]
    prefix?: string
 }): {
@@ -231,45 +233,43 @@ export function generateTypescriptDefinition(options: {
    const sourcesMap: { [shortname: string]: boolean } = {}
    const internalsMap: { [shortname: string]: string } = {}
    project.getSourceFiles().some(function (sourceFile) {
-      if (sourceFile.fileName.indexOf(normalizedBaseDir) !== 0) return
-      if (excludesMap[sourceFile.fileName]) return
+      const { fileName } = sourceFile
+      if (fileName.indexOf(normalizedBaseDir) !== 0) return
+      if (excludesMap[fileName]) return
 
-      const shortName = sourceFile.fileName.slice(normalizedBaseDir.length)
-      const shortNameNoExt = shortName.slice(0, -Path.extname(sourceFile.fileName).length)
+      const shortName = fileName.slice(normalizedBaseDir.length)
+      const shortNameNoExt = shortName.slice(0, -Path.extname(fileName).length)
       const strippedShortName = stripBaseUrlPrefix(shortName)
       const strippedShortNameNoExt = stripBaseUrlPrefix(shortNameNoExt)
 
-      let moduleId = `${options.prefix}/${strippedShortNameNoExt}`
+      const moduleId = `${options.prefix}/${strippedShortNameNoExt}`
       internalsMap[shortName] = moduleId
       internalsMap[shortNameNoExt] = moduleId
       internalsMap[strippedShortName] = moduleId
       internalsMap[strippedShortNameNoExt] = moduleId
-      sourcesMap[sourceFile.fileName] = true
+      sourcesMap[fileName] = true
    })
 
    // Build reverse map from internal paths to export names
    // e.g., "src/Inputs" -> "./Inputs" means internal path "src/Inputs" exports as "prefix/Inputs"
    // Store as [internalPrefix, exportName] pairs for prefix matching
    if (options.exports) {
-      for (const [exportPath, value] of Object.entries(options.exports)) {
-         const exported = typeof value === 'string' ? value : (value.import || value.default || value.types || '')
-         if (!exported) continue
+      for (const entry of Object.values(options.exports)) { 
+         const fileName = entry.source
+         if (fileName.indexOf(normalizedBaseDir) !== 0) continue 
+         if (excludesMap[fileName]) continue
 
-         let exportId = exportPath.replace(/^\.\//, '').replace(/\/$/, '')
-         if (exportId === '.') exportId = options.prefix
-         else exportId = `${options.prefix}/${exportId}`
-
-         // Normalize internal path: remove leading ./, strip extensions
-         const internalPath = normalizeFileName(exported)
-         let shortNameNoExt = internalPath.replace(/^\.\//, '').replace(/\.(ts|tsx|js|jsx)$/, '')
-         if (shortNameNoExt.endsWith('/index')) shortNameNoExt = shortNameNoExt.slice(0, -6)
+         const shortName = fileName.slice(normalizedBaseDir.length)
+         const shortNameNoExt = shortName.slice(0, -Path.extname(fileName).length)
+         const strippedShortName = stripBaseUrlPrefix(shortName)
          const strippedShortNameNoExt = stripBaseUrlPrefix(shortNameNoExt)
 
-         //this.log.info(shortNameNoExt, "->", exportId)
-         //this.log.info(strippedShortNameNoExt, "->", exportId)
-
-         internalsMap[shortNameNoExt] = exportId
-         internalsMap[strippedShortNameNoExt] = exportId
+         const moduleId = entry.id
+         internalsMap[shortName] = moduleId
+         internalsMap[shortNameNoExt] = moduleId
+         internalsMap[strippedShortName] = moduleId
+         internalsMap[strippedShortNameNoExt] = moduleId
+         sourcesMap[fileName] = true
       }
    }
 
@@ -283,18 +283,13 @@ export function generateTypescriptDefinition(options: {
       // Strip baseUrl prefix
       moduleId = stripBaseUrlPrefix(moduleId)
 
-      // Strip index suffix
-      if (moduleId === "index") {
-         return options.prefix
-      }
-      if (moduleId.endsWith("/index")) {
-         moduleId = moduleId.slice(0, -6)
-      }
       // Apply resolved prefix
-      if (internalsMap[moduleId]) {
-         moduleId = internalsMap[moduleId]
-      }
-      return moduleId
+      const remapped =
+         internalsMap[moduleId] ||
+         internalsMap[moduleId + "/index"] ||
+         internalsMap[moduleId + "/index.ts"]
+
+      return remapped || moduleId
    }
 
    // Generate source files
@@ -384,6 +379,9 @@ export function generateTypescriptDefinition(options: {
             const resolved: string = resolveModuleImport(expression.text)
             return ` require('${resolved}')`
          }
+         else if (isNodeKindImportDeclaration(node) && !node.importClause) {
+            return ''
+         }
          else if (node.kind === Ts.SyntaxKind.DeclareKeyword) {
             return ''
          }
@@ -460,7 +458,7 @@ export class TypescriptDefinitionTask extends BuildTask {
             project,
             prefix: lib.name,
             exclude: ["node_modules/**/*"],
-            exports: lib.descriptor.exports || {},
+            exports: create_export_map(lib, lib.bundle),
          })
          file.write.text(storage.getBaseDirFS() + "/types.d.ts", dts)
 

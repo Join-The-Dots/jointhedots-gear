@@ -1,13 +1,14 @@
-import { Library, matchComponentSelection, type AppEntry, type ChromeAppDescriptor, type ChromeAppManifest, type WebviewEntry } from "../model/workspace.ts"
-import { StorageFiles } from "../model/storage.ts"
-import { BuildTarget, BuildTask, BundleManifestTask } from "./build-target.ts"
-import type { WebAppManifest } from 'web-app-manifest'
 import Path from "node:path"
-import Fs from "node:fs"
 import Sharp from "sharp"
 import MIME from 'mime'
+import { Library, matchComponentSelection, type AppEntry, type ChromeAppDescriptor, type ChromeAppManifest, type WebviewEntry } from "../model/workspace.ts"
+import { StorageFiles } from "../model/storage.ts"
+import { BuildTarget } from "./build-target.ts"
+import type { WebAppManifest } from 'web-app-manifest'
 import { build_app_composable_host } from "./build-app-host.ts"
-import { DependencyDeduplicationPlugin } from "./esbuild-plugins.ts"
+import { DependencyDeduplicationPlugin } from "./helpers/emit-esmodules.ts"
+import { BundleManifestTask } from "./helpers/emit-bundle-manifest.ts"
+import { BuildTask } from "./helpers/task.ts"
 
 export type BuildApplicationOptions = {
    app: AppEntry

@@ -66,7 +66,7 @@ export type BundleManifest = ComponentManifest<{
 
    // Package redistribued by this bundle (force dependents bundle to use these package distribuable instead of bundling them)
    // > Used for shared library, ex: react, react-dom / or huge one, ex: @material/mui, ...
-   redistribueds?: string[] | {
+   distribueds?: {
       [packageName: string]: string | DistributedConfig
    }
 
@@ -104,7 +104,7 @@ export function checkComponentManifest(manif: ComponentManifest, path: string): 
    }
    return null
 }
- 
+
 export function makeComponentPublication(manif: ComponentManifest): ComponentPublication {
    return {
       id: manif.$id,

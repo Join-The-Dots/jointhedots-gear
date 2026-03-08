@@ -1,11 +1,13 @@
+import Path from "node:path"
 import { Bundle, Library } from "../model/workspace.ts"
 import { StorageFiles, type IStorageZone } from "../model/storage.ts"
-import { BuildTarget, BundleManifestTask } from "./build-target.ts"
-import { TypescriptDefinitionTask } from "./emit-dts.ts"
-import Path from "node:path"
+import { BuildTarget } from "./build-target.ts"
+import { TypescriptDefinitionTask } from "./helpers/emit-typescript-definition.ts"
+import { PackageManifestTask } from "./helpers/emit-package-manifest.ts"
 import { PathQualifier } from "./helpers/path-helpers.ts"
-import { create_manifests } from "../model/helpers/create-manifests.ts"
-import { DependencyDeduplicationPlugin, collectLibraryGraph } from "./esbuild-plugins.ts"
+import { create_export_map } from "../model/helpers/create-manifests.ts"
+import { DependencyDeduplicationPlugin, collectLibraryGraph } from "./helpers/emit-esmodules.ts"
+import { BundleManifestTask } from "./helpers/emit-bundle-manifest.ts"
 
 export type BuildBundleOptions = {
    bundle: Bundle
@@ -36,20 +38,20 @@ export function create_bundle_target(opts: {
    const { bundle, library, storage } = opts
    const lib = library
    const target = new BuildTarget(bundle.id, storage, lib.workspace, opts.devmode == true, opts.watch == true, opts.clean == true)
-   const manifs = create_manifests(lib, bundle, opts.version)
 
    // Prepare esm setup
    target.esmodules.set_root(lib.path)
 
    // Add bundle package.json
-   target.assets.add_static_json("package.json", manifs.package)
+   target.tasks.push(new PackageManifestTask(target, lib, opts.version))
 
    // Add bundle types.d.ts
    target.tasks.push(new TypescriptDefinitionTask(target, lib))
 
    // Add bundle exporteds
-   for (const exp_id in manifs.entries) {
-      const exp = manifs.entries[exp_id]
+   const entries = create_export_map(lib, lib.bundle)
+   for (const exp_id in entries) {
+      const exp = entries[exp_id]
       target.esmodules.add_entry(exp.basename, exp.source)
    }
 

@@ -13,7 +13,7 @@ import type { ResourceEntry } from "../../model/component.ts"
 import type { IStorageTransaction } from "../../model/storage.ts"
 import { BuildTask } from "./task.ts"
 
-const VirtualOutDir = Path.normalize('X:/')
+const VirtualOutDir = process.platform === 'win32' ? 'X:\\' : '/_/'
 
 function getEsbuildLogLevel(mode: "normal" | "debug" | "verbose"): esbuild.LogLevel {
    switch (mode) {

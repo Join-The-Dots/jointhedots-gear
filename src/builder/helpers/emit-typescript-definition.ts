@@ -1,12 +1,12 @@
-import * as Glob from 'glob'
+import Fs from 'fs'
 import Os from 'os'
 import Path from 'path'
 import Ts from 'typescript'
+import { execFileSync } from 'child_process'
 import { BuildTask } from "./task.ts"
 import { BuildTarget } from '../build-target.ts'
 import { Library } from '../../model/workspace.ts'
 import { file } from '../../utils/file.ts'
-import type { Log, Message } from '../../model/helpers/logger.ts'
 import { create_export_map, type ExportEntries } from '../../model/helpers/create-manifests.ts'
 
 const eol = Os.EOL
@@ -37,17 +37,6 @@ function getError(diagnostics: Ts.Diagnostic[]) {
    const error = new Error(message)
    error.name = 'EmitterError'
    return error
-}
-
-function getFilenames(baseDir: string, files: string[]): string[] {
-   return files.map(function (filename) {
-      const resolvedFilename = Path.resolve(filename)
-      if (resolvedFilename.indexOf(baseDir) === 0) {
-         return resolvedFilename
-      }
-
-      return Path.resolve(baseDir, filename)
-   })
 }
 
 function processTree(sourceFile: Ts.SourceFile, replacer: (node: Ts.Node) => string): string {
@@ -83,21 +72,6 @@ function processTree(sourceFile: Ts.SourceFile, replacer: (node: Ts.Node) => str
    return code
 }
 
-function getTSConfig(baseDir: string, tsconfig: string): [string[], Ts.CompilerOptions] {
-   const { config, error } = Ts.parseConfigFileTextToJson("tsconfig.json", tsconfig)
-   if (error) throw getError([error])
-
-   const configParsed = Ts.parseJsonConfigFileContent(config, Ts.sys, baseDir)
-   if (configParsed.errors && configParsed.errors.length) {
-      throw getError(configParsed.errors)
-   }
-
-   return [
-      configParsed.fileNames,
-      configParsed.options
-   ]
-}
-
 function isNodeKindImportType(value: Ts.Node): value is Ts.ImportTypeNode {
    return value && value.kind === Ts.SyntaxKind.ImportType
 }
@@ -120,49 +94,67 @@ function isNodeKindExportDeclaration(value: Ts.Node): value is Ts.ExportDeclarat
 
 class TypescriptProject {
    public readonly baseDir: string
-   public readonly files: string[]
    public readonly compilerOptions: Ts.CompilerOptions
-   public readonly host: Ts.CompilerHost
-   public readonly program: Ts.Program
-   public readonly filenames: string[]
+   public readonly dtsDir: string
 
    constructor(baseDir: string, tsconfig: string, outDir?: string) {
       this.baseDir = Path.resolve(baseDir)
 
-      const [files, compilerOptions] = getTSConfig(baseDir, tsconfig)
+      const { config, error } = Ts.parseConfigFileTextToJson("tsconfig.json", tsconfig)
+      if (error) throw getError([error])
 
-      compilerOptions.declaration = true
-      compilerOptions.emitDeclarationOnly = true
-      compilerOptions.noEmit = false
-      compilerOptions.target = compilerOptions.target || Ts.ScriptTarget.Latest
-      compilerOptions.moduleResolution = compilerOptions.moduleResolution || Ts.ModuleResolutionKind.Bundler
+      const configParsed = Ts.parseJsonConfigFileContent(config, Ts.sys, baseDir)
+      if (configParsed.errors?.length) throw getError(configParsed.errors)
+
+      const compilerOptions = configParsed.options
       compilerOptions.outDir = compilerOptions.outDir || outDir
-
-      this.files = files
       this.compilerOptions = compilerOptions
-      this.filenames = getFilenames(this.baseDir, files)
-      this.host = Ts.createCompilerHost(compilerOptions)
-      this.program = Ts.createProgram(this.filenames, compilerOptions, this.host)
+
+      // Create a temp directory for tsgo to emit .d.ts into
+      this.dtsDir = Fs.mkdtempSync(Path.join(Os.tmpdir(), 'gear-dts-'))
    }
 
-   public getSourceFiles(): readonly Ts.SourceFile[] {
-      return this.program.getSourceFiles()
+   /** Run tsgo to emit .d.ts files into dtsDir. Returns stderr output. */
+   public emitWithTsgo(): string {
+      const tsgoPath = Path.resolve('node_modules/.bin/tsgo')
+      const args = [
+         '-p', Path.join(this.baseDir, 'tsconfig.json'),
+         '--declaration',
+         '--emitDeclarationOnly',
+         '--skipLibCheck',
+         '--outDir', this.dtsDir,
+      ]
+      try {
+         execFileSync(tsgoPath, args, {
+            cwd: this.baseDir,
+            stdio: ['pipe', 'pipe', 'pipe'],
+            timeout: 120_000,
+            shell: true,
+         })
+         return ''
+      } catch (e: any) {
+         // tsgo may exit non-zero on type errors but still emit .d.ts files
+         return e.stderr?.toString() || e.message || ''
+      }
    }
 
-   public emit(sourceFile?: Ts.SourceFile, writeFile?: Ts.WriteFileCallback): Ts.EmitResult {
-      return this.program.emit(sourceFile, writeFile)
+   /** Recursively collect all .d.ts files emitted by tsgo */
+   public getEmittedDtsFiles(): string[] {
+      const results: string[] = []
+      function walk(dir: string) {
+         for (const entry of Fs.readdirSync(dir, { withFileTypes: true })) {
+            const full = Path.join(dir, entry.name)
+            if (entry.isDirectory()) walk(full)
+            else if (isDtsFilename(entry.name)) results.push(full)
+         }
+      }
+      if (Fs.existsSync(this.dtsDir)) walk(this.dtsDir)
+      return results
    }
 
-   public getSemanticDiagnostics(sourceFile?: Ts.SourceFile): readonly Ts.Diagnostic[] {
-      return this.program.getSemanticDiagnostics(sourceFile)
-   }
-
-   public getSyntacticDiagnostics(sourceFile?: Ts.SourceFile): readonly Ts.Diagnostic[] {
-      return this.program.getSyntacticDiagnostics(sourceFile)
-   }
-
-   public getDeclarationDiagnostics(sourceFile?: Ts.SourceFile): readonly Ts.Diagnostic[] {
-      return this.program.getDeclarationDiagnostics(sourceFile)
+   /** Clean up temp directory */
+   public cleanup() {
+      try { Fs.rmSync(this.dtsDir, { recursive: true, force: true }) } catch { }
    }
 }
 
@@ -180,24 +172,19 @@ export function generateTypescriptDefinition(options: {
    prefix?: string
 }): {
    dts: string,
-   diagnostics: Ts.Diagnostic[]
 } {
    const project = options.project
-   const diagnostics: Ts.Diagnostic[] = []
 
    const baseDir = project.baseDir
-   const outDir = project.compilerOptions.outDir
-   const excludesMap: { [filename: string]: boolean } = {}
+   const dtsDir = project.dtsDir
 
-   options.exclude = options.exclude || ['node_modules/**/*']
-   options.exclude.forEach(function (filename) {
-      Glob.sync(filename, { cwd: baseDir }).forEach(function (globFileName) {
-         excludesMap[normalizeFileName(Path.resolve(baseDir, globFileName))] = true
-      })
-   })
+   function isExcludedPath(fileName: string): boolean {
+      return fileName.includes('/node_modules/') || fileName.includes('\\node_modules\\')
+   }
 
    // Compute baseUrl prefix to strip from module paths
    const normalizedBaseDir = normalizeFileName(Path.resolve(baseDir)) + "/"
+   const normalizedDtsDir = normalizeFileName(Path.resolve(dtsDir)) + "/"
    let baseUrlPrefix = ''
    if (project.compilerOptions.baseUrl) {
       const absoluteBaseUrl = Path.resolve(baseDir, project.compilerOptions.baseUrl)
@@ -215,75 +202,71 @@ export function generateTypescriptDefinition(options: {
       return modulePath
    }
 
-   let outputContent = ''
+   const outputParts: string[] = []
 
    if (options.externs) {
       options.externs.forEach(function (path: string) {
-         outputContent += `/// <reference path="${path}" />` + eol
+         outputParts.push(`/// <reference path="${path}" />` + eol)
       })
    }
 
    if (options.types) {
       options.types.forEach(function (type: string) {
-         outputContent += `/// <reference types="${type}" />` + eol
+         outputParts.push(`/// <reference types="${type}" />` + eol)
       })
    }
 
-   // Filter source files
-   const sourcesMap: { [shortname: string]: boolean } = {}
+   // Map source-relative paths to internal: module IDs for ALL emitted files
    const internalsMap: { [shortname: string]: string } = {}
-   project.getSourceFiles().some(function (sourceFile) {
-      const { fileName } = sourceFile
-      if (fileName.indexOf(normalizedBaseDir) !== 0) return
-      if (excludesMap[fileName]) return
 
-      const shortName = fileName.slice(normalizedBaseDir.length)
-      const shortNameNoExt = shortName.slice(0, -Path.extname(fileName).length)
-      const strippedShortName = stripBaseUrlPrefix(shortName)
-      const strippedShortNameNoExt = stripBaseUrlPrefix(shortNameNoExt)
+   const dtsFiles = project.getEmittedDtsFiles()
+   for (const dtsPath of dtsFiles) {
+      const normalizedDts = normalizeFileName(Path.resolve(dtsPath))
+      if (!normalizedDts.startsWith(normalizedDtsDir)) continue
 
-      const moduleId = `${options.prefix}/${strippedShortNameNoExt}`
-      internalsMap[shortName] = moduleId
-      internalsMap[shortNameNoExt] = moduleId
-      internalsMap[strippedShortName] = moduleId
-      internalsMap[strippedShortNameNoExt] = moduleId
-      sourcesMap[fileName] = true
-   })
+      const relativeDts = normalizedDts.slice(normalizedDtsDir.length)
+      const relativeSource = relativeDts.replace(/\.d\.ts$/, '')
+      const strippedSource = stripBaseUrlPrefix(relativeSource)
 
-   // Build reverse map from internal paths to export names
-   // e.g., "src/Inputs" -> "./Inputs" means internal path "src/Inputs" exports as "prefix/Inputs"
-   // Store as [internalPrefix, exportName] pairs for prefix matching
-   if (options.exports) {
-      for (const entry of Object.values(options.exports)) { 
-         const fileName = entry.source
-         if (fileName.indexOf(normalizedBaseDir) !== 0) continue 
-         if (excludesMap[fileName]) continue
-
-         const shortName = fileName.slice(normalizedBaseDir.length)
-         const shortNameNoExt = shortName.slice(0, -Path.extname(fileName).length)
-         const strippedShortName = stripBaseUrlPrefix(shortName)
-         const strippedShortNameNoExt = stripBaseUrlPrefix(shortNameNoExt)
-
-         const moduleId = entry.id
-         internalsMap[shortName] = moduleId
-         internalsMap[shortNameNoExt] = moduleId
-         internalsMap[strippedShortName] = moduleId
-         internalsMap[strippedShortNameNoExt] = moduleId
-         sourcesMap[fileName] = true
+      const moduleId = `${options.prefix}:${strippedSource}`
+      internalsMap[relativeSource] = moduleId
+      internalsMap[strippedSource] = moduleId
+      if (strippedSource.endsWith('/index')) {
+         internalsMap[strippedSource.slice(0, -6)] = moduleId
       }
    }
 
+   // Build public export map: maps export entry ID to internal module ID
+   const publicReexports: { id: string, internalId: string }[] = []
 
-   // Unified module ID normalization: strip extensions, baseUrl prefix, and remap to exports
+   if (options.exports) {
+      for (const entry of Object.values(options.exports)) {
+         const fileName = entry.source
+         if (isExcludedPath(fileName)) continue
+
+         const normalizedSource = normalizeFileName(Path.resolve(fileName))
+         if (!normalizedSource.startsWith(normalizedBaseDir)) continue
+
+         const shortName = normalizedSource.slice(normalizedBaseDir.length)
+         const shortNameNoExt = shortName.replace(/\.(ts|tsx|js|jsx)$/, '')
+         const strippedShortNameNoExt = stripBaseUrlPrefix(shortNameNoExt)
+
+         const internalId =
+            internalsMap[shortNameNoExt] ||
+            internalsMap[strippedShortNameNoExt] ||
+            internalsMap[shortName]
+
+         if (internalId) {
+            publicReexports.push({ id: entry.id, internalId })
+         }
+      }
+   }
+
+   // Unified module ID normalization
    function normalizeModuleId(moduleId: string): string {
-
-      // Strip .ts, .tsx, .js, .jsx, .d.ts extensions
       moduleId = moduleId.replace(/\.(d\.ts|ts|tsx|js|jsx)$/, '')
-
-      // Strip baseUrl prefix
       moduleId = stripBaseUrlPrefix(moduleId)
 
-      // Apply resolved prefix
       const remapped =
          internalsMap[moduleId] ||
          internalsMap[moduleId + "/index"] ||
@@ -292,84 +275,44 @@ export function generateTypescriptDefinition(options: {
       return remapped || moduleId
    }
 
-   // Generate source files
-   project.getSourceFiles().some(function (sourceFile) {
-      if (!sourcesMap[sourceFile.fileName]) return
-
-      // Source file is already a declaration file so should does not need to be pre-processed by the emitter
-      if (isDtsFilename(sourceFile.fileName)) {
-         writeDeclaration(sourceFile, sourceFile.fileName)
-         return
-      }
-
-      const emitOutput = project.emit(sourceFile, (filename, data) => writeFile(filename, data, sourceFile.fileName))
-      if (emitOutput.emitSkipped || emitOutput.diagnostics.length > 0) {
-         diagnostics.push(...emitOutput.diagnostics)
-         diagnostics.push(...project.getSemanticDiagnostics(sourceFile))
-         diagnostics.push(...project.getSyntacticDiagnostics(sourceFile))
-         diagnostics.push(...project.getDeclarationDiagnostics(sourceFile))
-      }
-   })
-
    function isExternalModule(moduleId: string): boolean {
-      if (!internalsMap[moduleId]) {
-         return true
-      }
-      return false
+      return !internalsMap[moduleId]
    }
 
-   function writeFile(filename: string, data: string, sourceFilePath: string) {
-      if (isDtsFilename(filename)) {
-         const declFile = Ts.createSourceFile(filename, data, project.compilerOptions.target, true)
-         writeDeclaration(declFile, sourceFilePath)
-      }
+   // Process each emitted .d.ts file as internal: module
+   for (const dtsPath of dtsFiles) {
+      const normalizedDts = normalizeFileName(Path.resolve(dtsPath))
+      if (!normalizedDts.startsWith(normalizedDtsDir)) continue
+
+      const relativeDts = normalizedDts.slice(normalizedDtsDir.length)
+      const relativeSource = relativeDts.replace(/\.d\.ts$/, '')
+
+      const data = Fs.readFileSync(dtsPath, 'utf-8')
+      const declFile = Ts.createSourceFile(dtsPath, data, Ts.ScriptTarget.Latest, true)
+
+      writeDeclaration(declFile, relativeSource)
    }
 
-   function writeDeclaration(declarationFile: Ts.SourceFile, sourceFilePath: string) {
+   // Emit public re-export modules
+   for (const { id, internalId } of publicReexports) {
+      outputParts.push(`declare module '${id}' {${eol}`)
+      outputParts.push(`${indent}export * from '${internalId}';${eol}`)
+      outputParts.push(`}${eol}${eol}`)
+   }
 
-      // Compute rawSourceModuleId based on the source file path that produced the declaration
-      const resolvedSourcePath = Path.resolve(sourceFilePath)
-      const sourceExt = Path.extname(resolvedSourcePath)
-      const rawSourceModuleId = normalizeFileName(resolvedSourcePath.slice(baseDir.length + 1, -sourceExt.length))
-
-      // Normalize and remap the module ID
+   function writeDeclaration(declarationFile: Ts.SourceFile, rawSourceModuleId: string) {
       const moduleDeclId = normalizeModuleId(rawSourceModuleId)
-      outputContent += `declare module '${moduleDeclId}' {${eol}${indent}`
+      outputParts.push(`declare module '${moduleDeclId}' {${eol}${indent}`)
 
       function resolveModuleImport(moduleId: string): string {
-
-         // Resolve module id
          let resolved: string
          if (moduleId.charAt(0) === '.') {
             resolved = normalizeFileName(Path.join(Path.dirname(rawSourceModuleId), moduleId))
          } else {
-            // Try to resolve using TypeScript's module resolution (handles tsconfig paths)
-            const resolveResult = Ts.resolveModuleName(
-               moduleId,
-               declarationFile.fileName,
-               project.compilerOptions,
-               project.host
-            )
-
-            if (resolveResult.resolvedModule) {
-               const resolvedFileName = normalizeFileName(resolveResult.resolvedModule.resolvedFileName)
-               if (excludesMap[resolvedFileName]) return moduleId
-
-               // Check if resolved file is within our project (internal module)
-               if (resolvedFileName.startsWith(normalizedBaseDir)) {
-                  // Convert absolute path to relative module id
-                  resolved = resolvedFileName.slice(normalizedBaseDir.length)
-               } else {
-                  // External module - return as-is
-                  return moduleId
-               }
-            } else {
-               resolved = moduleId
-               if (isExternalModule(resolved)) return resolved
-            }
+            resolved = moduleId
+            if (isExternalModule(resolved)) return resolved
          }
 
-         // Normalize: strip extensions, baseUrl prefix, and remap to exports
          return normalizeModuleId(resolved)
       }
 
@@ -398,41 +341,12 @@ export function generateTypescriptDefinition(options: {
 
       const chunks = content.replaceAll("\r", "").split("\n").map(c => c.trimEnd())
       while (chunks.length > 0 && chunks[chunks.length - 1] === "") chunks.pop()
-      outputContent += chunks.join(eol + indent) + eol
-      outputContent += '}' + eol + eol
+      outputParts.push(chunks.join(eol + indent) + eol)
+      outputParts.push('}' + eol + eol)
    }
 
    return {
-      dts: outputContent,
-      diagnostics,
-   }
-}
-
-export function logDiagnostics(log: Log, diagnostics: Ts.Diagnostic[]) {
-   if (diagnostics && diagnostics.length > 0) {
-      for (const diagnostic of diagnostics) {
-         const text = typeof diagnostic.messageText === 'string'
-            ? diagnostic.messageText
-            : diagnostic.messageText.messageText
-
-         const message: Message = {
-            id: `TS${diagnostic.code}`,
-            text,
-            detail: diagnostic,
-         }
-
-         if (diagnostic.file && diagnostic.start !== undefined) {
-            const { line, character } = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start)
-            message.location = {
-               file: diagnostic.file.fileName,
-               line: line + 1,
-               column: character,
-               length: diagnostic.length ?? 0,
-            }
-         }
-
-         log.put('error', message)
-      }
+      dts: outputParts.join(''),
    }
 }
 
@@ -454,7 +368,12 @@ export class TypescriptDefinitionTask extends BuildTask {
 
          const project = createTypescriptProject(lib.path, configText, storage.getBaseDirFS())
 
-         const { dts, diagnostics } = generateTypescriptDefinition({
+         const stderr = project.emitWithTsgo()
+         if (stderr) {
+            this.log.warn(stderr)
+         }
+
+         const { dts } = generateTypescriptDefinition({
             project,
             prefix: lib.name,
             exclude: ["node_modules/**/*"],
@@ -462,7 +381,7 @@ export class TypescriptDefinitionTask extends BuildTask {
          })
          file.write.text(storage.getBaseDirFS() + "/types.d.ts", dts)
 
-         logDiagnostics(this.log, diagnostics)
+         project.cleanup()
       }
       catch (e) {
          this.log.error("no 'type.d.ts' will be generated for the package:" + e.message)

@@ -67,7 +67,7 @@ export class BuildTarget {
       const start = Date.now()
       await task.execute()
       const elapsed = (Date.now() - start) / 1000
-      this.log.info(`⏱ ${name} completed in ${elapsed.toFixed(2)}s`)
+      if (elapsed > 1.0) this.log.info(`⏱ ${name} completed in ${elapsed.toFixed(2)}s`)
    }
    async build() {
       const buildStartTime: number = Date.now()

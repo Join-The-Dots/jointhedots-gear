@@ -7,6 +7,7 @@ import { create_bundle_manifest } from "./create-manifests.ts"
 import { Bundle, Library, Workspace, type AppDescriptor, type DeclarationDescriptor, type PackageDescriptor } from "../workspace.ts"
 import { file, make_canonical_path, make_normalized_dirname, make_normalized_path, make_relative_path } from "../../utils/file.ts"
 import { findConfigFile, is_config_filename, readConfigFile, readSingletonConfigFile } from "./config-loader.ts"
+import { read_lockfile } from "./lockfile.ts"
 
 const exclude_dirs = ["node_modules", ".git"]
 
@@ -272,7 +273,7 @@ function show_constants(ws: Workspace) {
 }
 
 export async function discover_workspace(ws: Workspace): Promise<Workspace> {
-   let package_lock: any = null
+   let lockfile = null
    for (let path = ws.path; ;) {
       const package_json = await readJsonFile(path + "/package.json")
       if (package_json) {
@@ -287,31 +288,21 @@ export async function discover_workspace(ws: Workspace): Promise<Workspace> {
             }
          }
       }
-      const package_lock_path = path + "/package-lock.json"
-      if (!package_lock && Fs.existsSync(package_lock_path)) {
-         package_lock = await readJsonFile(package_lock_path)
+      if (!lockfile) {
+         lockfile = await read_lockfile(path)
       }
       const next_path = make_normalized_dirname(path)
       if (next_path === path) break
       path = next_path
    }
-   if (!package_lock) {
-      throw new Error(`Package lock not found for '${ws.name}'`)
+   if (!lockfile) {
+      throw new Error(`Lock file not found for '${ws.name}'`)
    }
 
-   for (const location in package_lock.packages) {
-      let pkg = package_lock.packages[location]
-      if (location.startsWith("node_modules/")) {
-         if (pkg.link) {
-            pkg = package_lock.packages[pkg.resolved]
-         }
-         const name = location.replace(/^.*node_modules\//, "")
-         ws.resolved_versions[name] = pkg.version
-      }
-   }
+   ws.resolved_versions = lockfile.resolved_versions
 
    await discover_workspace_libraries(ws)
-   for (const location in package_lock.packages) {
+   for (const location of lockfile.installed_locations) {
       await discover_library(ws, location, true)
    }
 

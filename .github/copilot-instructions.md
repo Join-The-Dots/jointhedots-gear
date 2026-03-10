@@ -1,5 +1,7 @@
 # GitHub Copilot Instructions
 
-Important guideline for this project:
+Guideline for this project:
 
 - Keep things simple and compact.
+
+IMPORTANT: Keep things simple and compact.

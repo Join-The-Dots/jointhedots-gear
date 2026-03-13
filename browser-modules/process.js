@@ -227,7 +227,7 @@ const process = {
     config,
     uptime,
 }
-window.process = process
+globalThis.process = process
 
 export {
     nextTick,

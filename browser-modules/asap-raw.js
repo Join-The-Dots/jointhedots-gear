@@ -38,7 +38,7 @@ function flush() {
     flushing = false;
 }
 
-var scope = typeof globalThis !== "undefined" ? globalThis : (typeof self !== "undefined" ? self : window);
+var scope = typeof globalThis !== "undefined" ? globalThis : (typeof self !== "undefined" ? self : globalThis);
 var BrowserMutationObserver = scope.MutationObserver || scope.WebKitMutationObserver;
 
 if (typeof BrowserMutationObserver === "function") {

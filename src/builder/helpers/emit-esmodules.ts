@@ -27,9 +27,10 @@ function getEsbuildLogLevel(mode: "normal" | "debug" | "verbose"): esbuild.LogLe
    }
 }
 
-export async function create_esbuild_context(
+async function create_esbuild_context(
    task: ESModulesTask,
    devmode: boolean,
+   onReady?: () => void
 ): Promise<esbuild.BuildContext> {
    const ws = task.target.workspace
 
@@ -127,7 +128,7 @@ export async function create_esbuild_context(
          ESModuleResolverPlugin(modules_mapping, tsconfig),
          ...task.plugins,
          StyleSheetPlugin(task),
-         StoragePlugin(task),
+         StoragePlugin(task, onReady),
       ],
       loader: {
          '.jpg': 'file',
@@ -287,7 +288,7 @@ function hasTailwindConfig(workspacePath: string): boolean {
    return false
 }
 
-export function StoragePlugin(task: ESModulesTask): esbuild.Plugin {
+export function StoragePlugin(task: ESModulesTask, onReady?: () => void): esbuild.Plugin {
    return {
       name: "dipatch-files",
       setup: (build) => {
@@ -323,7 +324,11 @@ export function StoragePlugin(task: ESModulesTask): esbuild.Plugin {
 
                const storeTime = (Date.now() - storeStart) / 1000
                const buildTime = (Date.now() - buildStartTime) / 1000
-               task.log.info(`Build ES modules in ${result.outputFiles.length} file(s) (compile: ${buildTime.toFixed(2)}s, store: ${storeTime.toFixed(2)}s)`)
+               task.log.info(`Store ES graph in ${result.outputFiles.length} file(s) (compile: ${buildTime.toFixed(2)}s, store: ${storeTime.toFixed(2)}s)`)
+            }
+            if (onReady) {
+               onReady()
+               onReady = null
             }
             return null
          })
@@ -659,12 +664,14 @@ export class ESModulesTask extends BuildTask {
       }
 
       const { target } = this
-      this.context = await create_esbuild_context(this, target.devmode)
-
       if (target.watch) {
-         await this.context.watch()
+         return new Promise<void>(async (resolve, reject) => {
+            this.context = await create_esbuild_context(this, target.devmode, resolve)
+            await this.context.watch()
+         })
       }
       else {
+         this.context = await create_esbuild_context(this, target.devmode)
          await this.context.rebuild()
          await this.context.dispose()
       }

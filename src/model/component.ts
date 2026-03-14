@@ -38,7 +38,7 @@ export type ComponentManifest<Data extends any = unknown> = {
    specs?: Record<string, ComponentSpec>
    data?: Data // Reserved to component derived from a driver component
    resources?: Record<string, ResourceEntry> // Resources catalog with undefined interface
-   services?: Record<string, ResourceEntry> // Resources providing specific services interfaces
+   apis?: Record<string, ResourceEntry> // Resources providing specific services interfaces
 }
 
 /** Configuration for a distributed package */
@@ -111,7 +111,7 @@ export function makeComponentPublication(manif: ComponentManifest): ComponentPub
       type: manif.type,
       icon: manif.icon,
       title: manif.title || manif.name || manif.$id,
-      services: manif.services ? Object.keys(manif.services) : [],
+      services: manif.apis ? Object.keys(manif.apis) : [],
       description: manif.description || "",
       keywords: manif.keywords,
       tags: manif.tags,

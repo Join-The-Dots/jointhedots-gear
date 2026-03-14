@@ -167,7 +167,7 @@
             "additionalProperties": true
          }
       },
-      "services": {
+      "apis": {
          "type": "object",
          "description": "Resources providing specific services interfaces.",
          "additionalProperties": {

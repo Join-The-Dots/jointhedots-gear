@@ -320,7 +320,7 @@ export function StoragePlugin(task: ESModulesTask, onReady?: () => void): esbuil
                      throw new Error(`Invalid output file: ${file.path}`)
                   }
                }
-               task.target.store()
+               await task.target.store()
 
                const storeTime = (Date.now() - storeStart) / 1000
                const buildTime = (Date.now() - buildStartTime) / 1000

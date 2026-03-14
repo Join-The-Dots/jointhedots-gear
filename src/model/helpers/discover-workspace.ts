@@ -51,6 +51,10 @@ async function discover_component(lib: Library, fpath: string) {
       if (desc.type !== "bundle") {
          const err = checkComponentManifest(desc, fpath)
          if (err) throw err
+         if (!desc.apis && desc["services"]) {
+            desc.apis = desc["services"] // Migrate renaming 'services' -> 'apis'
+            lib.log.warn(`Component '${desc.$id}' manifest shall rename 'services' -> 'apis'`)
+         }
          bundle.components.set(fpath, desc)
          lib.log.info(`+ 🧩 component: ${desc.$id} ${desc.type ? `(${desc.type})` : ""}`)
          return true

@@ -27,9 +27,9 @@ export class BuildTarget {
       if (!this.transaction) this.transaction = this.storage.edit()
       return this.transaction
    }
-   store() {
+   async store() {
       if (this.transaction) {
-         this.transaction.accept()
+         await this.transaction.accept()
          this.transaction = null
       }
    }
@@ -46,10 +46,10 @@ export class BuildTarget {
          entries: undefined,
       } as ComponentManifest
 
-      if (descriptor.services) {
-         manifest.services = {}
-         for (const name in descriptor.services) {
-            manifest.services[name] = this.esmodules.add_resource_entry(descriptor.services[name], baseDir, library)
+      if (descriptor.apis) {
+         manifest.apis = {}
+         for (const name in descriptor.apis) {
+            manifest.apis[name] = this.esmodules.add_resource_entry(descriptor.apis[name], baseDir, library)
          }
       }
 
@@ -95,7 +95,7 @@ export class BuildTarget {
          })
       }
       else {
-         this.store()
+         await this.store()
       }
    }
 }

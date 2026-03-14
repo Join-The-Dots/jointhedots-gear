@@ -5,10 +5,12 @@ import Path from 'node:path'
 import MIME from 'mime'
 import { directory } from '../utils/file.ts'
 
+export type StorageChanges = { added: string[], updated: string[], changed: boolean }
+
 export interface IStorageTransaction {
    commitContent(contentData: Uint8Array | string, contentType?: string): string
    commitFile(key: string, contentData: Uint8Array | string, contentType?: string)
-   accept(): { added: string[], updated: string[], changed: boolean }
+   accept(): Promise<StorageChanges>
 }
 
 export interface IStorageZone {
@@ -65,24 +67,22 @@ export class StorageTransaction implements IStorageTransaction {
       const hash = createContentCID(contentData)
       this.pending.set(fpath, { data: contentData, hash })
    }
-   accept(): { added: string[], updated: string[], changed: boolean } {
+   async accept(): Promise<StorageChanges> {
       const { root, scratch, baseDir } = this
-      directory.make(baseDir)
+      await Fsp.mkdir(baseDir, { recursive: true })
 
-      const changes = { added: [] as string[], updated: [] as string[], changed: false }
+      const changes: StorageChanges = { added: [], updated: [], changed: false }
+      const writes: Promise<void>[] = []
       for (const [fpath, { data, hash }] of this.pending) {
          const prev = root.cache.get(fpath)
          if (prev !== hash) {
             ; (prev ? changes.updated : changes.added).push(Path.basename(fpath))
-            directory.make(Path.dirname(fpath))
-            Fs.writeFileSync(fpath, data)
+            writes.push(Fsp.mkdir(Path.dirname(fpath), { recursive: true }).then(() => Fsp.writeFile(fpath, data)))
          }
          root.cache.set(fpath, hash)
       }
+      await Promise.all(writes)
       this.pending.clear()
-      /*
-            const removed = root.cache.size - newCache.size + changes.added.length
-            changes.changed = removed !== 0 || changes.added.length !== 0 || changes.updated.length !== 0*/
       if (changes.updated.length > 0 || changes.added.length > 0) {
          root.on_changes.sendEventsToAll("change", changes)
       }

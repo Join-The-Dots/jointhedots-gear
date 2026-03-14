@@ -1,12 +1,12 @@
 import Path from 'node:path'
 import { type CommandModule } from "yargs"
-import { StorageFiles } from "../model/storage.ts"
-import { type AppEntry, Bundle, Library, open_workspace } from "../model/workspace.ts"
+import { StorageFiles } from "../workspace/storage.ts"
+import { type AppEntry, Bundle, Library, open_workspace } from "../workspace/workspace.ts"
 import { build_application } from "../builder/build-application.ts"
 import { build_app_composable_bundle } from "../builder/build-app-bundle.ts"
 import { build_library } from "../builder/build-library.ts"
 import { makeNormalizedName, NameStyle } from '../utils/normalized-name.js'
-import { resolvePackageVersion } from "../model/helpers/package-npm.ts"
+import { resolvePackageVersion } from "../workspace/helpers/package-npm.ts"
 
 type MakeOptions = {
    watch?: boolean

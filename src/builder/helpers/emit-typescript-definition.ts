@@ -6,9 +6,9 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { BuildTask } from "./task.ts"
 import { BuildTarget } from '../build-target.ts'
-import { Library } from '../../model/workspace.ts'
+import { Library } from '../../workspace/workspace.ts'
 import { file } from '../../utils/file.ts'
-import { create_export_map, type ExportEntries } from '../../model/helpers/create-manifests.ts'
+import { create_export_map, type ExportEntries } from '../../workspace/helpers/create-manifests.ts'
 
 const eol = Os.EOL
 const indent = "    "

@@ -6,11 +6,11 @@ import postcss from 'postcss'
 import * as esbuild from 'esbuild'
 import { sassPlugin } from 'esbuild-sass-plugin'
 import { PackageRootDir, resolve_normalized_suffixed_path } from "../../utils/file.ts"
-import type { Log } from "../../model/helpers/logger.ts"
-import { Library } from "../../model/workspace.ts"
+import type { Log } from "../../workspace/helpers/logger.ts"
+import { Library } from "../../workspace/workspace.ts"
 import { computeNameHashID } from "../../utils/normalized-name.ts"
-import type { ResourceEntry } from "../../model/component.ts"
-import type { IStorageTransaction } from "../../model/storage.ts"
+import type { ResourceEntry } from "../../workspace/component.ts"
+import type { IStorageTransaction } from "../../workspace/storage.ts"
 import { BuildTask } from "./task.ts"
 
 const VirtualOutDir = process.platform === 'win32' ? 'X:\\' : '/_/'

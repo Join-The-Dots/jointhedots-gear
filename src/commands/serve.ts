@@ -1,11 +1,11 @@
 import Path from 'node:path'
 import { type CommandModule } from "yargs"
-import { StorageFiles } from "../model/storage.ts"
-import { open_workspace, Workspace } from "../model/workspace.ts"
+import { StorageFiles } from "../workspace/storage.ts"
+import { open_workspace, Workspace } from "../workspace/workspace.ts"
 import { build_application } from "../builder/build-application.ts"
 import { makeNormalizedName, NameStyle } from '../utils/normalized-name.js'
 import Express from 'express'
-import { resolvePackageVersion } from "../model/helpers/package-npm.ts"
+import { resolvePackageVersion } from "../workspace/helpers/package-npm.ts"
 
 export function command_serve(): CommandModule<any, {
    app?: string

@@ -1,8 +1,8 @@
-import { type ComponentID, type ComponentManifest } from "../model/component.ts"
-import { Library, Workspace } from "../model/workspace.ts"
-import type { Log } from "../model/helpers/logger.ts"
+import { type ComponentID, type ComponentManifest } from "../workspace/component.ts"
+import { Library, Workspace } from "../workspace/workspace.ts"
+import type { Log } from "../workspace/helpers/logger.ts"
 import { ESModulesTask } from "./helpers/emit-esmodules.ts"
-import { type IStorageTransaction, type IStorageZone } from "../model/storage.ts"
+import { type IStorageTransaction, type IStorageZone } from "../workspace/storage.ts"
 import { AssetsTask } from "./helpers/emit-static-assets.ts"
 import type { BuildTask } from "./helpers/task.ts"
 

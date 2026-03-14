@@ -1,7 +1,7 @@
 import { BuildTask } from "./task.ts"
 import type { BuildTarget } from "../build-target.ts"
-import type { Bundle, Library, PackageDescriptor } from "../../model/workspace.ts"
-import { create_export_map, create_package_manifest } from "../../model/helpers/create-manifests.ts"
+import type { Bundle, Library, PackageDescriptor } from "../../workspace/workspace.ts"
+import { create_export_map, create_package_manifest } from "../../workspace/helpers/create-manifests.ts"
 import { console } from "node:inspector"
 
 export class PackageManifestTask extends BuildTask {

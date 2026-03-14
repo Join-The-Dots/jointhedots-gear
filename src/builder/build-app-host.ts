@@ -1,10 +1,10 @@
-import { Bundle, matchComponentSelection, Workspace, type AppEntry, type PackageDescriptor, } from "../model/workspace.ts"
-import { StorageFiles } from "../model/storage.ts"
+import { Bundle, matchComponentSelection, Workspace, type AppEntry, type PackageDescriptor, } from "../workspace/workspace.ts"
+import { StorageFiles } from "../workspace/storage.ts"
 import { BuildTarget } from "./build-target.ts"
 import { build_app_composable_bundle } from './build-app-bundle.ts'
 import Path from "node:path"
 import { PWAPackageTask, WebviewTask, type BuildApplicationOptions } from "./build-application.ts"
-import type { BundleID } from "../model/component.ts"
+import type { BundleID } from "../workspace/component.ts"
 import { topologicalSort } from "../utils/graph-ordering.ts"
 
 function create_application_composable_target(opts: {

@@ -1,11 +1,11 @@
 import Path from "node:path"
 import ChildProcess from "child_process"
-import { Library } from "../model/workspace.ts"
-import { StorageFiles } from "../model/storage.ts"
+import { Library } from "../workspace/workspace.ts"
+import { StorageFiles } from "../workspace/storage.ts"
 import { BuildTarget } from "./build-target.ts"
 import { TypescriptDefinitionTask } from "./helpers/emit-typescript-definition.ts"
 import { PackageManifestTask } from "./helpers/emit-package-manifest.ts"
-import { create_export_map } from "../model/helpers/create-manifests.ts"
+import { create_export_map } from "../workspace/helpers/create-manifests.ts"
 import { BundleManifestTask } from "./helpers/emit-bundle-manifest.ts"
 
 export type BuildLibraryOptions = {

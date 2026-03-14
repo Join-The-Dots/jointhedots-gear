@@ -1,5 +1,5 @@
-import { makeComponentPublication, type ComponentPublication } from "../../model/component.ts"
-import type { Bundle } from "../../model/workspace.ts"
+import { makeComponentPublication, type ComponentPublication } from "../../workspace/component.ts"
+import type { Bundle } from "../../workspace/workspace.ts"
 import { BuildTarget } from "../build-target.ts"
 import { BuildTask } from "./task.ts"
 import MIME from 'mime'

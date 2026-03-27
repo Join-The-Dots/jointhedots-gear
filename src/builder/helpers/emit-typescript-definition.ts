@@ -13,6 +13,11 @@ import { create_export_map, type ExportEntries } from '../../workspace/helpers/c
 const eol = Os.EOL
 const indent = "    "
 const DTSLEN = '.d.ts'.length
+const EXT_RE = /\.(d\.ts|tsx?|jsx?|mjs|json)$/
+
+function normalizeModuleId(id: string): string {
+   return id.replace(EXT_RE, '').replace(/\/index$/, '')
+}
 
 function normalizeFileName(filename: string) {
    return filename.replaceAll(Path.sep, "/")
@@ -187,7 +192,7 @@ export function generateTypescriptDefinition(options: {
    const baseDir = project.baseDir
    const normalizedBaseDir = normalizeFileName(Path.resolve(baseDir)) + "/"
    const normalizedDtsDir = normalizeFileName(Path.resolve(project.dtsDir)) + "/"
-   const resolveCache = new Map<string, string | null>()
+   const resolveCache = new Map<string, string>()
    const modulesWithDefault = new Set<string>()
    const outputParts: string[] = []
 
@@ -221,8 +226,9 @@ export function generateTypescriptDefinition(options: {
    // Emit public re-export modules
    if (options.exports) {
       for (const entry of Object.values(options.exports)) {
+         if (!entry.source) continue
          const internalId = resolveInternalModuleImport(entry.source)
-         if (internalId) {
+         if (internalId.startsWith(prefix)) {
             outputParts.push(`declare module '${entry.id}' {${eol}`)
             outputParts.push(`${indent}export * from '${internalId}';${eol}`)
             if (modulesWithDefault.has(internalId)) {
@@ -233,9 +239,9 @@ export function generateTypescriptDefinition(options: {
       }
    }
 
-   function resolveInternalModuleImport(moduleId: string, importDir: string = ""): string | null {
+   function resolveInternalModuleImport(moduleId: string, importDir: string = ""): string {
       if (moduleId.charAt(0) === '.') {
-         return prefix + normalizeFileName(Path.join(importDir, moduleId))
+         return prefix + normalizeModuleId(normalizeFileName(Path.join(importDir, moduleId)))
       }
       if (resolveCache.has(moduleId)) return resolveCache.get(moduleId)!
       const containingFile = Path.resolve(baseDir, importDir, '__resolve.ts')
@@ -243,24 +249,18 @@ export function generateTypescriptDefinition(options: {
       if (result.resolvedModule && !result.resolvedModule.isExternalLibraryImport) {
          const resolved = normalizeFileName(result.resolvedModule.resolvedFileName)
          if (resolved.startsWith(normalizedBaseDir)) {
-            const value = prefix + resolved.slice(normalizedBaseDir.length).replace(/\.(d\.ts|tsx?|jsx?)$/, '')
+            const value = prefix + normalizeModuleId(resolved.slice(normalizedBaseDir.length))
             resolveCache.set(moduleId, value)
             return value
          }
       }
-      // Check if moduleId is already an internal path relative to baseDir
-      const absolute = normalizeFileName(Path.resolve(baseDir, importDir, moduleId))
-      if (absolute.startsWith(normalizedBaseDir)) {
-         const value = prefix + absolute.slice(normalizedBaseDir.length)
-         resolveCache.set(moduleId, value)
-         return value
-      }
-      resolveCache.set(moduleId, null)
-      return null
+      // Not resolved as internal — keep the original module specifier
+      resolveCache.set(moduleId, moduleId)
+      return moduleId
    }
 
    function writeDeclaration(declarationFile: Ts.SourceFile, rawSourceModuleId: string) {
-      const moduleDeclId = resolveInternalModuleImport(rawSourceModuleId)
+      const moduleDeclId = prefix + normalizeModuleId(rawSourceModuleId)
       const moduleDir = Path.dirname(rawSourceModuleId)
       if (hasDefaultExport(declarationFile)) modulesWithDefault.add(moduleDeclId)
       outputParts.push(`declare module '${moduleDeclId}' {${eol}${indent}`)
@@ -268,7 +268,7 @@ export function generateTypescriptDefinition(options: {
       const content = processTree(declarationFile, function (node) {
          if (isNodeKindExternalModuleReference(node)) {
             const expression = node.expression as Ts.LiteralExpression
-            const resolved = resolveInternalModuleImport(expression.text, moduleDir) ?? expression.text
+            const resolved = resolveInternalModuleImport(expression.text, moduleDir)
             return ` require('${resolved}')`
          }
          else if (isNodeKindImportDeclaration(node) && !node.importClause) {
@@ -282,7 +282,7 @@ export function generateTypescriptDefinition(options: {
             (isNodeKindExportDeclaration(node.parent) || isNodeKindImportDeclaration(node.parent) || isNodeKindImportType(node.parent?.parent))
          ) {
             const resolved = resolveInternalModuleImport(node.text, moduleDir)
-            if (resolved != null) {
+            if (resolved !== node.text) {
                return ` '${resolved}'`
             }
          }

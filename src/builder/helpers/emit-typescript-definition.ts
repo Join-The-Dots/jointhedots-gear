@@ -93,6 +93,18 @@ function isNodeKindExportDeclaration(value: Ts.Node): value is Ts.ExportDeclarat
    return value && value.kind === Ts.SyntaxKind.ExportDeclaration
 }
 
+function hasDefaultExport(sourceFile: Ts.SourceFile): boolean {
+   return sourceFile.statements.some(stmt => {
+      if (stmt.kind === Ts.SyntaxKind.ExportAssignment) return !(stmt as Ts.ExportAssignment).isExportEquals
+      const mods = Ts.canHaveModifiers(stmt) ? Ts.getModifiers(stmt) : undefined
+      if (mods?.some(m => m.kind === Ts.SyntaxKind.ExportKeyword) && mods?.some(m => m.kind === Ts.SyntaxKind.DefaultKeyword)) return true
+      if (isNodeKindExportDeclaration(stmt) && stmt.exportClause && Ts.isNamedExports(stmt.exportClause)) {
+         return stmt.exportClause.elements.some(e => e.name.text === 'default')
+      }
+      return false
+   })
+}
+
 class TypescriptProject {
    public readonly baseDir: string
    public readonly compilerOptions: Ts.CompilerOptions
@@ -176,6 +188,7 @@ export function generateTypescriptDefinition(options: {
    const normalizedBaseDir = normalizeFileName(Path.resolve(baseDir)) + "/"
    const normalizedDtsDir = normalizeFileName(Path.resolve(project.dtsDir)) + "/"
    const resolveCache = new Map<string, string | null>()
+   const modulesWithDefault = new Set<string>()
    const outputParts: string[] = []
 
    if (options.externs) {
@@ -212,6 +225,9 @@ export function generateTypescriptDefinition(options: {
          if (internalId) {
             outputParts.push(`declare module '${entry.id}' {${eol}`)
             outputParts.push(`${indent}export * from '${internalId}';${eol}`)
+            if (modulesWithDefault.has(internalId)) {
+               outputParts.push(`${indent}export { default } from '${internalId}';${eol}`)
+            }
             outputParts.push(`}${eol}${eol}`)
          }
       }
@@ -246,6 +262,7 @@ export function generateTypescriptDefinition(options: {
    function writeDeclaration(declarationFile: Ts.SourceFile, rawSourceModuleId: string) {
       const moduleDeclId = resolveInternalModuleImport(rawSourceModuleId)
       const moduleDir = Path.dirname(rawSourceModuleId)
+      if (hasDefaultExport(declarationFile)) modulesWithDefault.add(moduleDeclId)
       outputParts.push(`declare module '${moduleDeclId}' {${eol}${indent}`)
 
       const content = processTree(declarationFile, function (node) {

@@ -4,11 +4,49 @@ import { BuildTarget } from "./build-target.ts"
 import { build_app_composable_bundle } from './build-app-bundle.ts'
 import Path from "node:path"
 import { PWAPackageTask, WebviewTask, type BuildApplicationOptions } from "./build-application.ts"
-import type { BundleID } from "../workspace/component.ts"
+import { makeComponentPublication, type BundleID, type BundleManifest, type ComponentManifest, type ComponentPublication } from "../workspace/component.ts"
 import { topologicalSort } from "../utils/graph-ordering.ts"
+import { BuildTask } from "./helpers/task.ts"
+
+export class ShelveManifestTask extends BuildTask {
+   constructor(readonly target: BuildTarget, readonly bundles: Bundle[]) {
+      super(target)
+   }
+   async execute() {
+      const { bundles } = this
+
+      // Emit static components manifest
+      const namespaces = new Set<string>()
+      const components: ComponentPublication[] = []
+      for (const bundle of bundles) {
+         const pub = makeComponentPublication(bundle.manifest)
+         const nss = bundle.manifest.type === "bundle" && bundle.manifest.data?.["namespaces"]
+         if (Array.isArray(nss)) {
+            for (const ns of nss) {
+               namespaces.add(ns)
+            }
+         }
+         components.push(pub)
+      }
+
+      // Emit bundle manifest
+      const tx = this.target.edit()
+      const manifest: BundleManifest = {
+         $id: ".",
+         type: "bundle",
+         data: {
+            namespaces: Array.from(namespaces),
+            components,
+         }
+      }
+      await tx.commitFile(`bundle.manifest.json`, JSON.stringify(manifest, null, 2))
+   }
+}
+
 
 function create_application_composable_target(opts: {
    app: AppEntry
+   bundles: Bundle[]
    storage: StorageFiles
    version: string
    devmode: boolean
@@ -16,7 +54,7 @@ function create_application_composable_target(opts: {
    watch: boolean
    clean: boolean
 }): BuildTarget {
-   const { app, version } = opts
+   const { app, bundles, version } = opts
    const { type, name, webviews, modules, assets, components } = app.descriptor
    const lib = app.library
    const bundle = lib.bundle
@@ -39,6 +77,9 @@ function create_application_composable_target(opts: {
    html_injects.push(`<link rel="manifest" href="/manifest.json">`)
    html_injects.push(`<link rel="icon" type="image/webp" href="favicon.webp" />`)
    target.tasks.push(new PWAPackageTask(target, app))
+
+   // Generate shelve manifest
+   target.tasks.push(new ShelveManifestTask(target, bundles))
 
    // Add application webviews
    for (const name in webviews) {
@@ -127,10 +168,10 @@ export async function build_app_composable_host(opts: BuildApplicationOptions): 
    if (shelveBundles.missing.length > 0) {
       ws.log.warn(`Missing bundle dependencies: ${shelveBundles.missing.join(", ")}`)
    }
-   await Promise.all(shelvePendings)
 
    const target = create_application_composable_target({
       app,
+      bundles: await Promise.all(shelveBundles),
       storage: opts.storage,
       version: opts.version,
       devmode: opts.devmode,
@@ -166,8 +207,10 @@ export class BundleSelector {
 
       // Recursively add dependencies
       const deps = bun.dependencies
-      for (const depId of deps) {
-         this.add(depId)
+      if (deps) {
+         for (const depId of deps) {
+            this.add(depId)
+         }
       }
       if (bun.source) {
          for (const depId in bun.source.descriptor?.dependencies) {

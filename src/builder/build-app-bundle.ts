@@ -135,7 +135,7 @@ export function create_bundle_target(opts: {
       else if (state !== PathStatus.Internal) {
          target.log.error(`Bundle cannot distributed '${dist}' (status ${state})`)
       }
-   }
+   } 
    // TODO: traverse all workspace bundles to add their entrypoint has PathStatus.Dependency
 
    // Register esbuild plugin for external dependencies
@@ -151,14 +151,14 @@ export function create_bundle_target(opts: {
             }
             let state = paths_qualifier.check(path)
             if (state === PathStatus.Dependency || state === PathStatus.External) {
-               //target.log.info(`External: ${path} <- ${importer}`)
+               //target.log.warn(`External: ${path} <- ${importer}`)
                return { external: true }
             }
             if (state === PathStatus.ExternalBundle) {
                throw new Error(`ExternalBundle: ${path} <- ${importer}`)
             }
             if (state instanceof Bundle) {
-               //target.log.info(`Bundle: ${state.id} <- ${importer}`)
+               //target.log.warn(`Bundle: ${state.id} <- ${importer}`)
                const entry_id = state.resolve_export(path)
                if (!entry_id) {
                   return { errors: [{ text: `Bundle '${state.id}' do not distribute expected entry: ${path}` }] }
@@ -180,7 +180,7 @@ export function create_bundle_target(opts: {
                   namespace: "external-bundle-proxy",
                }
             }
-            //target.log.trace(`Internal: ${path} <- ${importer}`)
+            //target.log.warn(`Internal: ${path} <- ${importer}`)
          })
 
          // Load virtual proxy modules for external bundle references
@@ -212,7 +212,7 @@ export function create_bundle_target(opts: {
    return target
 }
 
-export async function build_app_composable_bundle(opts: BuildBundleOptions) {
+export async function build_app_composable_bundle(opts: BuildBundleOptions): Promise<BuildTarget> {
    const { bundle } = opts
    if (bundle.source) {
       const storage = opts.shelve.branch(bundle.id)
@@ -230,6 +230,7 @@ export async function build_app_composable_bundle(opts: BuildBundleOptions) {
 
       target.log.info(`Build bundle: ${target.name}`)
       await target.build()
+      return target
    }
    else {
       bundle.log.info(`Prebuild bundle: ${opts.bundle.id}`)

@@ -68,6 +68,9 @@ export type AppEntry = {
 }
 
 export type DeclarationDescriptor = BundleManifest["data"] & {
+   // Reference to a custom packager entrypoint in a npm package
+   packager?: string
+
    // List of tags used to define for what build options this desciptor shall be taken into account
    selectors?: string[]
 

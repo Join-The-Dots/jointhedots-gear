@@ -7,6 +7,7 @@ import { TypescriptDefinitionTask } from "./helpers/emit-typescript-definition.t
 import { PackageManifestTask } from "./helpers/emit-package-manifest.ts"
 import { create_export_map } from "../workspace/helpers/create-manifests.ts"
 import { BundleManifestTask } from "./helpers/emit-bundle-manifest.ts"
+import { ComponentsDtsTask } from "./helpers/emit-components-dts.ts"
 
 export type BuildLibraryOptions = {
    library: Library
@@ -43,6 +44,7 @@ export function create_library_target(opts: {
 
    // Add library package.json
    target.tasks.push(new PackageManifestTask(target, lib, opts.version))
+   target.tasks.push(new ComponentsDtsTask(target, lib.bundle))
 
    // Add bundle content
    const { bundle } = lib

@@ -2,6 +2,7 @@ import Path from "node:path"
 import { makeComponentPublication, type BundleManifest, type ComponentPublication } from "../component.ts"
 import type { Bundle, Library, PackageDescriptor } from "../workspace.ts"
 import { resolve_normalized_suffixed_path } from "../../utils/file.ts"
+import { getNormalizedKeys } from "../../utils/normalized-name.ts"
 
 export type ExportEntry = {
    id: string
@@ -63,14 +64,18 @@ export function create_bundle_manifest(lib: Library, bun: Bundle): BundleManifes
    const entries = create_export_map(lib, bun)
    const bundle_manif = bun.manifest
 
+   const namespaces = new Set<string>()
    const components: ComponentPublication[] = []
    for (const comp of bun.components.values()) {
+      const ns = getNormalizedKeys(comp.$id)[0]
+      if (ns) namespaces.add(ns)
       components.push(makeComponentPublication(comp))
    }
 
    bundle_manif.data = {
       baseline: bun.id + "-v0",
       components: components,
+      namespaces: Array.from(namespaces),
       exports: {},
    }
    for (const id in entries) {

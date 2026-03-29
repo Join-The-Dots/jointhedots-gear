@@ -1,9 +1,13 @@
 {
    "name": "@jointhedots/gear",
-   "version": "1.1.16",
+   "version": "1.1.18",
    "type": "module",
+   "packageManager": "pnpm@10.30.3",
    "bin": {
       "jointhedots-gear": "esm/cli.js"
+   },
+   "exports": {
+      "./workspace": "./esm/workspace.js"
    },
    "files": [
       "esm",
@@ -23,7 +27,7 @@
       ":build:lib:ui": "node --enable-source-maps --watch-path=esm esm/cli make --libs @jointhedots/ui --devmode --ws ../jointhedots-core/packages/jointhedots-ui",
       ":build:app": "node --enable-source-maps --watch-path=esm esm/cli make --apps playground:ui --ws ../jointhedots-core",
       "serve:mono": "node --enable-source-maps --watch-path=esm esm/cli serve --app playground:ui --devmode --port 3002 --ws ../jointhedots-core",
-      "serve:host": "node --enable-source-maps --watch-path=esm esm/cli serve --app playground:ui:host  --port 3002 --ws ../jointhedots-core",
+      "serve:host": "node --enable-source-maps --watch-path=esm esm/cli serve --app playground:ui:host --devmode --port 3002 --ws ../jointhedots-core",
       "serve:sfe": "node --enable-source-maps --watch-path=esm esm/cli serve --app sfe-demo --devmode --ws ../sf-explorer-app",
       "serve:demo": "node --enable-source-maps --watch-path=esm esm/cli serve --app sfe-demo --devmode --ws ../sf-explorer-demo",
       "make:sfe": "node --enable-source-maps --watch-path=esm esm/cli make --libs @sf-explorer/app --devmode --ws ../sf-explorer-app",

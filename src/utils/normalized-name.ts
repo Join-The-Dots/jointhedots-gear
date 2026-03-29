@@ -56,16 +56,8 @@ export function isNormalizedName(name: string, expectedStyle?: NameStyle): boole
    return check_name_regexes[style].test(name)
 }
 
-export function makeNormalizedKey(key: string, targetStyle: NameStyle): string {
-   const seps = NormalizedNameSeparators[targetStyle]
-   const parts = key.replace(/[^a-z0-9\s\t\n:._-]/g, "").split(/[\s\t\n:._-]/g)
-   return parts.filter(x => !!x).join(seps.key)
-}
-
-export function makeNormalizedName(name: string, targetStyle: NameStyle, fromStyle?: NameStyle): string {
-   if (!name || typeof name !== "string") return name
-
-   const seps = NormalizedNameSeparators[targetStyle]
+export function getNormalizedKeys(name: string, fromStyle?: NameStyle): string[] {
+   if (!name || typeof name !== "string") return []
 
    // Split into lowercase keys
    let keys: string[]
@@ -85,8 +77,19 @@ export function makeNormalizedName(name: string, targetStyle: NameStyle, fromSty
 
    // Normalize keys
    for (let i = 0; i < keys.length; i++) {
-      keys[i] = makeNormalizedKey(keys[i], targetStyle)
+      keys[i] = keys[i].replace(/[^a-z0-9\s\t\n:._-]/g, "")
    }
+
+   return keys
+}
+
+export function makeNormalizedName(name: string, targetStyle: NameStyle, fromStyle?: NameStyle): string {
+   if (!name || typeof name !== "string") return name
+
+   const seps = NormalizedNameSeparators[targetStyle]
+
+   // Split into lowercase keys
+   const keys = getNormalizedKeys(name, fromStyle)
 
    // Reform name, filtering out empty keys
    return keys.filter(x => !!x).join(seps.namespace)

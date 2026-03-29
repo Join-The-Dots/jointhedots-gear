@@ -8,6 +8,8 @@ import { Bundle, Library, Workspace, type AppDescriptor, type DeclarationDescrip
 import { file, make_canonical_path, make_normalized_dirname, make_normalized_path, make_relative_path } from "../../utils/file.ts"
 import { findConfigFile, is_config_filename, readConfigFile, readSingletonConfigFile } from "./config-loader.ts"
 import { read_lockfile } from "./lockfile.ts"
+import { LoadLibraryPackager, type LibraryPackager } from "../packager.ts"
+import { BundledLibraryPackager, DefaultLibraryPackager } from "../packagers/packager-standard.ts"
 
 const exclude_dirs = ["node_modules", ".git"]
 
@@ -21,9 +23,9 @@ function is_ignored_dir(ws: Workspace, path: string): boolean {
    return false
 }
 
-function setup_library_bundle(lib: Library, bundle_desc?: any) {
+export function setup_library_bundle(lib: Library) {
    const ws = lib.workspace
-   const manif = make_library_bundle_manifest(lib, bundle_desc)
+   const manif = make_library_bundle_manifest(lib)
    let bun = ws.get_bundle(manif.$id)
    if (!bun) {
       bun = new Bundle(manif, lib.path, ws, lib)
@@ -37,7 +39,7 @@ function setup_library_bundle(lib: Library, bundle_desc?: any) {
    }
 }
 
-async function discover_component(lib: Library, fpath: string) {
+export async function discover_component(lib: Library, fpath: string) {
    let bundle = lib.bundle
    if (!bundle) {
       bundle = setup_library_bundle(lib)
@@ -93,7 +95,7 @@ async function discover_application(lib: Library, fpath: string) {
    }
 }
 
-async function discover_library_components(lib: Library, path: string, subdir: boolean = false) {
+export async function discover_library_components(lib: Library, path: string, subdir: boolean = false) {
 
    // List names from directory
    const fnames = await Fsp.readdir(path)
@@ -140,54 +142,25 @@ export function collect_declarations_field(lib: Library, key: string, value: any
    return value
 }
 
-function make_library_bundle_manifest(lib: Library, file_desc?: Partial<BundleManifest>): BundleManifest {
-   let $id = file_desc?.$id
-   if ($id) {
-      $id = makeNormalizedName($id, NameStyle.OBJECT)
-      if ($id !== file_desc.$id) {
-         lib.log.warn(`Bundle '${file_desc.$id}' is normalized into '${$id}'`)
+function make_library_bundle_manifest(lib: Library): BundleManifest {
+   return {
+      $id: makeNormalizedName(collect_declarations_field(lib, "$id", lib.name), NameStyle.OBJECT),
+      type: "bundle",
+      name: lib.name,
+      icon: collect_declarations_field(lib, "icon", ""),
+      title: collect_declarations_field(lib, "title", lib.name),
+      tags: collect_declarations_field(lib, "tags", lib.descriptor?.tags),
+      keywords: collect_declarations_field(lib, "keywords", lib.descriptor?.keywords),
+      description: collect_declarations_field(lib, "description", lib.descriptor?.description),
+      selectors: collect_declarations_field(lib, "selectors", undefined),
+      data: {
+         package: lib.get_id(),
+         alias: collect_declarations_field(lib, "alias", lib.name),
+         namespaces: collect_declarations_field(lib, "namespaces", []),
+         dependencies: collect_declarations_field(lib, "dependencies", []),
+         distribueds: collect_declarations_field(lib, "distribueds", {}),
       }
    }
-   else {
-      $id = makeNormalizedName(lib.name, NameStyle.OBJECT)
-      lib.log.info(`Bundle '${$id}' named from library '${lib.name}'`)
-   }
-
-   const data: BundleManifest["data"] = {
-      package: lib.get_id(),
-      alias: collect_declarations_field(lib, "alias", lib.name),
-      namespaces: collect_declarations_field(lib, "namespaces", []),
-      dependencies: collect_declarations_field(lib, "dependencies", []),
-      distribueds: collect_declarations_field(lib, "distribueds", {}),
-   }
-
-   if (file_desc?.data) {
-      data.alias = file_desc.data.alias ?? data.alias
-      if (file_desc.data.distribueds) {
-         Object.assign(data.distribueds, file_desc.data.distribueds)
-      }
-      if (Array.isArray(file_desc.data.namespaces)) {
-         data.namespaces.push(...file_desc.data.namespaces)
-      }
-      if (Array.isArray(file_desc.data.dependencies)) {
-         data.dependencies.push(...file_desc.data.dependencies)
-      }
-   }
-
-   const manifest: BundleManifest = {
-      $id,
-      type: file_desc?.type,
-      name: file_desc?.name ?? lib.name,
-      icon: file_desc?.icon,
-      title: file_desc?.title,
-      tags: file_desc?.tags,
-      keywords: file_desc?.keywords,
-      description: file_desc?.description ?? lib.descriptor?.description,
-      selectors: file_desc?.selectors,
-      data,
-   }
-
-   return manifest
 }
 
 enum Discovered {
@@ -201,8 +174,9 @@ async function discover_library(ws: Workspace, location: string, installed: bool
    if (is_ignored_dir(ws, lib_path)) return Discovered.Ignored
 
    const package_path = lib_path + "/package.json"
-   const manifest_path = findConfigFile(lib_path, "bundle.manifest")
-   if (!file.exists(package_path) && !file.exists(manifest_path)) return Discovered.None
+   const has_package_manifest = file.exists(package_path)
+   const has_bundle_manifest = file.exists(findConfigFile(lib_path, "bundle.manifest"))
+   if (!has_package_manifest && !has_bundle_manifest) return Discovered.None
 
    const lib_not_exists = ws.libraries.reduce((r, lib) => r && lib.path !== lib_path, true)
    if (!lib_not_exists) return Discovered.Ignored
@@ -210,8 +184,7 @@ async function discover_library(ws: Workspace, location: string, installed: bool
    const lib_desc = await readJsonFile<PackageDescriptor>(package_path)
    if (!lib_desc?.name) return Discovered.Ignored
 
-   const manifest_desc = await readConfigFile<BundleManifest>(manifest_path)
-   if (manifest_desc || !installed) {
+   if (has_bundle_manifest || !installed) {
 
       const other = ws.get_library(lib_desc.name)
       if (other) {
@@ -228,25 +201,29 @@ async function discover_library(ws: Workspace, location: string, installed: bool
       ws.libraries.push(lib)
       ws.log.info(`+ 📚 library: ${installed ? "⏬" : "🐣"} ${lib.get_id()} (${make_relative_path(ws.path, location)})`)
 
-      // Setup library infos from bundle manifest
-      setup_library_bundle(lib, manifest_desc)
-
-      // Analyze library deployment manifest (supports json/yaml/yml/toml, singleton)
-      if (manifest_desc?.data?.components) {
-         for (const pub of manifest_desc.data.components) {
-            const fpath = lib_path + "/" + (pub.ref ?? pub.id)
-            await discover_component(lib, fpath)
-         }
-      }
-
       // Setup node search directory
       const lib_search_path = lib_path + "/node_modules"
       if (Fs.existsSync(lib_search_path)) {
          lib.search_directories.push(lib_search_path)
       }
 
-      // Collect library declaration
-      await discover_library_components(lib, lib_path)
+      // Load library packager
+      let packager: LibraryPackager = null
+      if (has_bundle_manifest) {
+         packager = new BundledLibraryPackager()
+      } else {
+         const declaration_config = await readSingletonConfigFile<DeclarationDescriptor>(lib_path, "declaration")
+         const packager_ref = declaration_config && declaration_config.data?.packager
+         if (packager_ref) {
+            packager = await LoadLibraryPackager(packager_ref)
+         }
+         else {
+            packager = new DefaultLibraryPackager()
+         }
+      }
+
+      // Discover library with packager
+      await packager.discover_library(lib)
 
       return Discovered.Registered
    }

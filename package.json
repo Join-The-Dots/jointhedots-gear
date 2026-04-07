@@ -7,7 +7,8 @@
       "jointhedots-gear": "esm/cli.js"
    },
    "exports": {
-      "./workspace": "./esm/workspace.js"
+      "./workspace": "./esm/workspace/mod.js",
+      "./core": "./esm/core/mod.js"
    },
    "files": [
       "esm",
@@ -38,6 +39,9 @@
       "@jspm/core": "^2.1.0",
       "@tailwindcss/postcss": "~4.1.3",
       "@typescript/native-preview": "^7.0.0-dev.20260310.1",
+      "json-schema": "^0.4.0",
+      "vscode-uri": "^3.1.0",
+      "zod": "^4.3.6",
       "dotenv": "~17.2.3",
       "esbuild": "~0.27.2",
       "esbuild-sass-plugin": "~3.6.0",

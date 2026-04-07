@@ -97,6 +97,10 @@ export interface PackageDescriptor {
    module?: string
    description?: string
 
+   // Custom definition
+   dots?: boolean // true when package is a jointhedots package
+   singleton?: boolean // true when the package doesn't support multiple package versions at runtime
+
    // Executable definition
    bin?: {
       [commandName: string]: string
@@ -143,21 +147,31 @@ export class Library extends WorkspaceItem {
    declarations = new Map<FileID, DeclarationDescriptor>()
    applications = new Map<FileID, AppDescriptor>()
    externals: Record<string, string> = {}
-   search_directories: FileID[] = null
+   resolved_versions: Record<string, string> = {}
+   search_directories: FileID[] = []
+   constants: Constants = {}
+   shelve: Bundle[] = []
    constructor(
       readonly name: string,
       readonly path: FileID,
       readonly descriptor: PackageDescriptor,
       readonly workspace: Workspace,
-      readonly installed: boolean,
    ) {
       super(workspace, `lib:${name}`)
-      this.search_directories = workspace.search_directories.slice()
       Object.assign(this.externals, descriptor.peerDependencies, descriptor.dependencies)
    }
    get_id(): string {
       const { name, version } = this.descriptor
       return `${name}-${version}`
+   }
+   get_bundle(id: string): Bundle {
+      for (const bundle of this.shelve) {
+         if (bundle.id === id) return bundle
+      }
+      for (const bundle of this.shelve) {
+         if (bundle.alias === id) return bundle
+      }
+      return null
    }
    make_file_id(prefix: string, id: string): string {
       const devmode = true
@@ -224,11 +238,8 @@ export type OpenWorkspaceOptions = {
 
 // Workspace est l'objet a travers lequel on connecte tous les elements
 export class Workspace {
-   bundles: Bundle[] = []
    libraries: Library[] = []
    constants: Constants = {}
-   resolved_versions: Record<string, string> = {}
-   search_directories: string[] = []
    ignored_directories = new Set<string>()
    readonly logger = new Logger()
    readonly log: Log
@@ -241,11 +252,12 @@ export class Workspace {
       this.log = this.logger.get(`workspace:${name}`)
    }
    get_bundle(id: string): Bundle {
-      for (const bundle of this.bundles) {
-         if (bundle.id === id) return bundle
+      for (const lib of this.libraries) {
+         if (lib.bundle.id === id) return lib.bundle
       }
-      for (const bundle of this.bundles) {
-         if (bundle.alias === id) return bundle
+      for (const lib of this.libraries) {
+         const bun = lib.get_bundle(id)
+         if (bun) return bun
       }
       return null
    }

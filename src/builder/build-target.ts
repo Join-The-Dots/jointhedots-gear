@@ -36,7 +36,7 @@ export class BuildTarget {
    add_component(descriptor: ComponentManifest, baseDir: string, library: Library) {
       const id = descriptor.$id
       if (this.components.has(id)) {
-         throw new Error(createComponentDuplicateMessage(id, this.workspace))
+         throw new Error(createComponentDuplicateMessage(id, library))
       }
 
       const manifest = {
@@ -100,10 +100,10 @@ export class BuildTarget {
    }
 }
 
-function createComponentDuplicateMessage(id: string, workspace: Workspace) {
+function createComponentDuplicateMessage(id: string, library: Library) {
    const duplicates = []
    const libs = []
-   for (const bun of workspace.bundles) {
+   for (const bun of library.shelve) {
       for (const [cpath, cmanifest] of bun.components.entries()) {
          if (cmanifest.$id === id) {
             duplicates.push(`\n - ${cpath}`)

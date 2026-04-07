@@ -35,8 +35,7 @@ export function create_bundle_target(opts: {
    watch: boolean
    clean: boolean
 }): BuildTarget {
-   const { bundle, library, storage } = opts
-   const lib = library
+   const { bundle, library: lib, storage } = opts
    const target = new BuildTarget(bundle.id, storage, lib.workspace, opts.devmode == true, opts.watch == true, opts.clean == true)
 
    // Prepare esm setup
@@ -113,7 +112,7 @@ export function create_bundle_target(opts: {
          paths_qualifier.set(dep, PathStatus.ExternalBundle)
       }
    }
-   for (const xbun of lib.workspace.bundles) {
+   for (const xbun of lib.shelve) {
       if (xbun !== bundle) {
          paths_qualifier.set(xbun.id, xbun)
          paths_qualifier.set(xbun.alias, xbun)
@@ -135,7 +134,7 @@ export function create_bundle_target(opts: {
       else if (state !== PathStatus.Internal) {
          target.log.error(`Bundle cannot distributed '${dist}' (status ${state})`)
       }
-   } 
+   }
    // TODO: traverse all workspace bundles to add their entrypoint has PathStatus.Dependency
 
    // Register esbuild plugin for external dependencies
@@ -204,9 +203,8 @@ export function create_bundle_target(opts: {
    })
 
    // Register esbuild plugin for dependency deduplication (graph-based + singleton)
-   const ws = library.workspace
-   const rootNodeModules = ws.search_directories[0] || Path.join(ws.path, 'node_modules')
-   const libGraph = collectLibraryGraph(library)
+   const rootNodeModules = lib.search_directories[0] || Path.join(lib.path, 'node_modules')
+   const libGraph = collectLibraryGraph(lib)
    target.esmodules.plugins.push(DependencyDeduplicationPlugin(libGraph, rootNodeModules, target.log))
 
    return target

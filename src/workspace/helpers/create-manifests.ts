@@ -101,7 +101,7 @@ export function create_package_manifest(lib: Library, bun: Bundle, build_version
    } as PackageDescriptor
 
    if (pkg_manif.dependencies) {
-      const resolved = lib.workspace.resolved_versions
+      const resolved = lib.resolved_versions
       for (const dep in pkg_manif.dependencies) {
          if (pkg_manif.dependencies[dep] === "*") {
             const dep_resolved = resolved[dep]

@@ -54,8 +54,7 @@ export function create_application_monolith_target(opts: {
    const { app, version } = opts
    const { type, name, webviews, modules, assets, components } = app.descriptor
    const lib = app.library
-   const ws = lib.workspace
-   const target = new BuildTarget(name, opts.storage, ws, opts.devmode == true, opts.watch == true, opts.clean == true)
+   const target = new BuildTarget(name, opts.storage, lib.workspace, opts.devmode == true, opts.watch == true, opts.clean == true)
    const libs = collect_app_libraries(app)
    target.log.info(`+ 🧭 app-library-graph: ${libs.map(lib => `${lib.name}@${lib.descriptor.version}`).join(", ")}`)
 
@@ -187,7 +186,7 @@ export function create_application_monolith_target(opts: {
    }
 
    // Register esbuild plugin for dependency deduplication (graph-based + singleton)
-   const rootNodeModules = ws.search_directories[0] || Path.join(ws.path, 'node_modules')
+   const rootNodeModules = lib.search_directories[0] || Path.join(lib.path, 'node_modules')
    target.esmodules.plugins.push(DependencyDeduplicationPlugin(libs, rootNodeModules, target.log))
    return target
 }

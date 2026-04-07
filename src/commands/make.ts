@@ -103,8 +103,8 @@ export function command_make(): CommandModule<any, MakeOptions & {
 
          const bundles: Bundle[] = []
          if (argv.bundles === "*") {
-            for (const bundle of ws.bundles) {
-               bundles.push(bundle)
+            for (const lib of ws.libraries) {
+               if (lib.bundle) bundles.push(lib.bundle)
             }
          }
          else if (argv.bundles) {

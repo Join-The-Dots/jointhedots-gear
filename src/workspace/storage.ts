@@ -72,16 +72,25 @@ export class StorageTransaction implements IStorageTransaction {
       await Fsp.mkdir(baseDir, { recursive: true })
 
       const changes: StorageChanges = { added: [], updated: [], changed: false }
-      const writes: Promise<void>[] = []
-      for (const [fpath, { data, hash }] of this.pending) {
-         const prev = root.cache.get(fpath)
-         if (prev !== hash) {
-            ; (prev ? changes.updated : changes.added).push(Path.basename(fpath))
-            writes.push(Fsp.mkdir(Path.dirname(fpath), { recursive: true }).then(() => Fsp.writeFile(fpath, data)))
-         }
+      const pending_writes = [...this.pending].filter(([fpath, { hash }]) => root.cache.get(fpath) !== hash)
+
+      const write_channel = async () => {
+         const item = pending_writes.pop()
+         if (!item) return
+
+         const [fpath, { data, hash }] = item
+         const changelist = root.cache.has(fpath) ? changes.updated : changes.added
+         changelist.push(Path.basename(fpath))
          root.cache.set(fpath, hash)
+
+         await Fsp.mkdir(Path.dirname(fpath), { recursive: true })
+         await Fsp.writeFile(fpath, data)
+
+         if (pending_writes.length > 0) {
+            return write_channel()
+         }
       }
-      await Promise.all(writes)
+      await Promise.all(Array.from({ length: Math.min(100, pending_writes.length) }, () => write_channel()))
       this.pending.clear()
       if (changes.updated.length > 0 || changes.added.length > 0) {
          root.on_changes.sendEventsToAll("change", changes)

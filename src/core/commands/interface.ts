@@ -1,6 +1,6 @@
 import { URI } from "vscode-uri"
 import { acquireComponent } from "../components/manifold.ts"
-import { Log } from "../logging/index.ts"
+import { Log } from "../logging/mod.ts"
 
 export type Serializable = string | number | boolean | null | Serializable[] | { [key: string]: Serializable }
 

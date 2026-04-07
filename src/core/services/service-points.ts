@@ -1,7 +1,7 @@
 import { acquireComponent, ComponentsRegistry } from "../components/manifold.ts"
 import { type ComponentID } from "../components/components.ts"
 import { getSettings, listenSettings, WriteMode } from "./settings.ts"
-import { type ILogDispatcher, Log, type LogObject } from "../logging/index.ts"
+import { type ILogDispatcher, Log, type LogObject } from "../logging/mod.ts"
 import { ServiceAccessor, type ServiceType } from "./service-accessor.ts"
 
 export const ServicePoints: Map<string, ServicePoint> = new Map()

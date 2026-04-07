@@ -1,4 +1,4 @@
-import type { ComponentEntry } from "../components/manifold"
+import type { ComponentEntry } from "../components/manifold.ts"
 
 //-------------------------------------------------------------
 // Service: programming resource provided by a component

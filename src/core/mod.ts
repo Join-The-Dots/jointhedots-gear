@@ -1,7 +1,7 @@
-export * from "./components"
-export * from "./services"
-export * from "./commands/interface"
-export * from "./logging"
-export * from "./schema"
+export * from "./components/mod.ts"
+export * from "./services/mod.ts"
+export * from "./commands/interface.ts"
+export * from "./logging/mod.ts"
+export * from "./schema/mod.ts"
 
 

@@ -8,12 +8,13 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "strict": false,
-    "module": "ES2022",
-    "moduleResolution": "bundler",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "noUnusedLocals": false,
     "noImplicitThis": true,
     "sourceMap": false,
     "declaration": true,
+    "rootDir": "src",
     "outDir": "esm",
     "jsx": "react-jsx",
     "lib": [
@@ -27,6 +28,7 @@
   ],
   "exclude": [
     "esm",
-    "node_modules"
+    "node_modules",
+    "scripts"
   ]
 }

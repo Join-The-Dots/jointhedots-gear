@@ -1,4 +1,4 @@
-import type { Bundle, Library } from "./workspace"
+import type { Bundle, Library } from "./workspace.ts"
 import ChildProcess from "child_process"
 
 export interface LibraryPackager {

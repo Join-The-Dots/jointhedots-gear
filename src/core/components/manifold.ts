@@ -1,6 +1,6 @@
 import { URI, Utils } from "vscode-uri"
 import { type ComponentFilter, type ComponentManifest, type ComponentPublication, ComponentControllerKey, type IContentProvider, type IResourceLoader, type IComponentProvider } from "./components.ts"
-import { Log, queryLogInfos, queryLogObjects, type QueryLogResult } from "../logging/index.ts"
+import { Log, queryLogInfos, queryLogObjects, type QueryLogResult } from "../logging/mod.ts"
 import { parseResourceEntry } from "./helpers.ts"
 
 export type ComponentErrorManifest = ComponentManifest & {

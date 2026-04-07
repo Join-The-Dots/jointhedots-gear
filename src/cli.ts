@@ -7,8 +7,6 @@ import { command_init } from "./commands/init.ts"
 import { command_install } from "./commands/install.ts"
 import { command_make } from "./commands/make.ts"
 import { command_serve } from "./commands/serve.ts"
-import { command_publish } from "./commands/publish.ts"
-import { getDefaultComponent } from "./core/mod.ts"
 
 function command_fail() {
    return {
@@ -24,7 +22,6 @@ Yargs(hideBin(Process.argv)).scriptName("jointhedots-gear")
    .command(command_install())
    .command(command_make())
    .command(command_serve())
-   .command(command_publish())
    .command(command_run())
    .command(command_fail())
    .showHelpOnFail(true)

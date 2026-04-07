@@ -1,4 +1,4 @@
-import type { BuildTarget } from "../build-target"
+import type { BuildTarget } from "../build-target.ts"
 
 export abstract class BuildTask {
    constructor(readonly target: BuildTarget) { }

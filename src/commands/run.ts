@@ -1,4 +1,4 @@
-import NodeWatch from "node-watch"
+import Fs from 'fs'
 import Process from 'process'
 import Path from 'path'
 import ChildProcess from 'child_process'
@@ -115,7 +115,7 @@ export function command_run(): CommandModule<any, {
          Process.stdin.resume()
          Process.stdin.on('data', onKeyPress)
 
-         const watcher = NodeWatch(argv.dir, { recursive: true }) as any
+         const watcher = Fs.watch(argv.dir, { recursive: true })
          watcher.on('change', () => restart())
          start()
       }

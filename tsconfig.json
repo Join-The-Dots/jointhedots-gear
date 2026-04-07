@@ -12,7 +12,8 @@
     "moduleResolution": "bundler",
     "noUnusedLocals": false,
     "noImplicitThis": true,
-    "sourceMap": true,
+    "sourceMap": false,
+    "declaration": true,
     "outDir": "esm",
     "jsx": "react-jsx",
     "lib": [

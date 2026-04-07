@@ -16,7 +16,7 @@
       "!**/*.map"
    ],
    "scripts": {
-      "watch": "tsc -w",
+      "watch": "tsc -w --sourceMap",
       "build": "tsc",
       ":serve": "node --enable-source-maps --watch-path=esm esm/cli serve --app playground:agent --devmode --port 3001 --ws ../jointhedots-core/packages/jointhedots-agent",
       ":build:core": "node --enable-source-maps --watch-path=esm esm/cli make --buns jointhedots.core --devmode --ws ../jointhedots-core/packages/jointhedots-core",

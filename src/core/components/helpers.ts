@@ -1,7 +1,8 @@
-import { URI } from 'vscode-uri'
-import { type ComponentFilter, type ComponentManifest, type ComponentPublication } from './components.ts'
-import { acquireComponent } from './manifold.ts'
-import type { ResourceEntry, ResourceImport } from '../schema/schema.ts'
+import { URI } from "vscode-uri"
+import { type ComponentManifest, type ComponentPublication } from "./components.ts"
+import { acquireComponent } from "./manifold.ts"
+import type { ResourceEntry, ResourceImport } from "../schema/schema.ts"
+import type { ComponentFilter } from "./provider.ts"
 
 export function parseComponentURI(ref: string): URI {
    if (ref.startsWith("./")) {
@@ -49,66 +50,6 @@ export async function createComponentPublication(manif: ComponentManifest): Prom
       tags: manif.tags,
       services: await getComponentServicesList(manif),
    }
-}
-
-export function createComponentFilter(filter?: Partial<ComponentFilter>): ComponentFilter {
-   const result: ComponentFilter = {
-      query: filter?.query || "",
-      pattern: filter?.pattern || null,
-      tags: filter?.tags || [],
-      keywords: filter?.keywords || [],
-      services: filter?.services || [],
-      types: filter?.types || [],
-   }
-   if (result.query.length > 0) {
-      for (const kw of result.query.split(/\s/)) {
-         if (kw.length > 0 && !result.keywords.includes(kw)) {
-            result.keywords.push(kw)
-         }
-      }
-   }
-   if (result.keywords.length > 0) {
-      result.pattern = new RegExp(`(${result.keywords.join(").*(")})`)
-   }
-   return result
-}
-
-export function matchComponentFilter(pub: ComponentPublication, filter?: Partial<ComponentFilter>): boolean {
-   function match_text(text: string, pattern: RegExp): boolean {
-      if (!pattern) {
-         return true
-      }
-      if (text) {
-         return !pattern || pattern.test(text)
-      }
-      return false
-   }
-   function match_item_in_list(target: string, expecteds: string[]): boolean {
-      if (expecteds.length === 0) {
-         return true
-      }
-      if (target && expecteds.includes(target)) {
-         return true
-      }
-      return false
-   }
-   function match_list_in_list(targets: string[], expecteds: string[]): boolean {
-      if (expecteds.length === 0) {
-         return true
-      }
-      if (targets) {
-         for (const target of targets) {
-            if (expecteds.includes(target)) return true
-         }
-      }
-      return false
-   }
-   if (!match_text(pub.title || pub.id, filter.pattern) && !match_text(pub.description, filter.pattern)) return false
-   if (!match_list_in_list(pub.services, filter.services)) return false
-   if (!match_list_in_list(pub.keywords, filter.keywords)) return false
-   if (!match_list_in_list(pub.tags, filter.tags)) return false
-   if (!match_item_in_list(pub.type, filter.types)) return false
-   return true
 }
 
 export function parseResourceEntry(entry: ResourceEntry): ResourceImport {

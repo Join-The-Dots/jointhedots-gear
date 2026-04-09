@@ -1,6 +1,6 @@
 {
    "name": "@jointhedots/gear",
-   "version": "1.2.0",
+   "version": "1.2.2",
    "type": "module",
    "packageManager": "pnpm@10.30.3",
    "bin": {
@@ -8,7 +8,12 @@
    },
    "exports": {
       "./workspace": "./esm/workspace/mod.js",
-      "./core": "./esm/core/mod.js"
+      "./core": {
+         "browser": "./esm/core/mod-browser.js",
+         "node": "./esm/core/mod-node.js",
+         "deno": "./src/core/mod.ts",
+         "default": "./esm/core/mod.js"
+      }
    },
    "files": [
       "esm",
@@ -19,19 +24,19 @@
    "scripts": {
       "watch": "tsc -w --sourceMap",
       "build": "tsc",
-      ":serve": "node --enable-source-maps --watch-path=esm esm/cli serve --app playground:agent --devmode --port 3001 --ws ../jointhedots-core/packages/jointhedots-agent",
-      ":build:core": "node --enable-source-maps --watch-path=esm esm/cli make --buns jointhedots.core --devmode --ws ../jointhedots-core/packages/jointhedots-core",
-      ":build:ui": "node --enable-source-maps --watch-path=esm esm/cli make --buns jointhedots.ui --ws ../jointhedots-core/packages/jointhedots-ui",
-      ":build:cortex": "node --enable-source-maps --watch-path=esm esm/cli make --buns @jointhedots/cortex --devmode --ws ../jointhedots-core/packages/jointhedots-cortex",
-      ":build:libs": "node --enable-source-maps --watch-path=esm esm/cli make --libs @jointhedots/core,@jointhedots/ui --devmode --ws ../jointhedots-core",
-      ":build:lib:core": "node --enable-source-maps --watch-path=esm esm/cli make --libs @jointhedots/core --devmode --ws ../jointhedots-core/packages/jointhedots-core",
-      ":build:lib:ui": "node --enable-source-maps --watch-path=esm esm/cli make --libs @jointhedots/ui --devmode --ws ../jointhedots-core/packages/jointhedots-ui",
-      ":build:app": "node --enable-source-maps --watch-path=esm esm/cli make --apps playground:ui --ws ../jointhedots-core",
-      "serve:mono": "node --enable-source-maps --watch-path=esm esm/cli serve --app playground:ui --devmode --port 3002 --ws ../jointhedots-core",
-      "serve:host": "node --enable-source-maps --watch-path=esm esm/cli serve --app playground:ui:host --devmode --port 3002 --ws ../jointhedots-core",
-      "serve:sfe": "node --enable-source-maps --watch-path=esm esm/cli serve --app sfe-demo --devmode --ws ../sf-explorer-app",
-      "serve:demo": "node --enable-source-maps --watch-path=esm esm/cli serve --app sfe-demo --devmode --ws ../sf-explorer-demo",
-      "make:sfe": "node --enable-source-maps --watch-path=esm esm/cli make --libs @sf-explorer/app --devmode --ws ../sf-explorer-app",
+      ":serve": "deno --allow-all --watch=src src/cli.ts serve --app playground:agent --devmode --port 3001 --ws ../jointhedots-core/packages/jointhedots-agent",
+      ":build:core": "deno --allow-all --watch=src src/cli.ts make --buns jointhedots.core --devmode --ws ../jointhedots-core/packages/jointhedots-core",
+      ":build:ui": "deno --allow-all --watch=src src/cli.ts make --buns jointhedots.ui --ws ../jointhedots-core/packages/jointhedots-ui",
+      ":build:cortex": "deno --allow-all --watch=src src/cli.ts make --buns @jointhedots/cortex --devmode --ws ../jointhedots-core/packages/jointhedots-cortex",
+      ":build:libs": "deno --allow-all --watch=src src/cli.ts make --libs @jointhedots/core,@jointhedots/ui --devmode --ws ../jointhedots-core",
+      ":build:lib:core": "deno --allow-all --watch=src src/cli.ts make --libs @jointhedots/core --devmode --ws ../jointhedots-core/packages/jointhedots-core",
+      ":build:lib:ui": "deno --allow-all --watch=src src/cli.ts make --libs @jointhedots/ui --devmode --ws ../jointhedots-core/packages/jointhedots-ui",
+      ":build:app": "deno --allow-all --watch=src src/cli.ts make --apps playground:ui --ws ../jointhedots-core",
+      "serve:mono": "deno --allow-all --watch=src src/cli.ts serve --app playground:ui --devmode --port 3002 --ws ../jointhedots-core",
+      "serve:host": "deno --allow-all --watch=src src/cli.ts serve --app playground:ui:host --devmode --port 3002 --ws ../jointhedots-core",
+      "serve:sfe": "deno --allow-all --watch=src src/cli.ts serve --app sfe-webapp --devmode --ws ../sf-explorer-app",
+      "serve:demo": "deno --allow-all --watch=src src/cli.ts serve --app sfe-demo --devmode --ws ../sf-explorer-demo",
+      "make:sfe": "deno --allow-all --watch=src src/cli.ts make --libs @sf-explorer/app --devmode --ws ../sf-explorer-app",
       "prepublishOnly": "node scripts/prepublish.mjs"
    },
    "dependencies": {

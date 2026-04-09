@@ -1,7 +1,7 @@
 import { Bundle, matchComponentSelection, Workspace, type AppEntry, type PackageDescriptor, } from "../workspace/workspace.ts"
 import { StorageFiles } from "../workspace/storage.ts"
 import { BuildTarget } from "./build-target.ts"
-import { build_app_composable_bundle } from './build-app-bundle.ts'
+import { build_app_composable_bundle } from "./build-app-bundle.ts"
 import Path from "node:path"
 import { PWAPackageTask, WebviewTask, type BuildApplicationOptions } from "./build-application.ts"
 import { makeComponentPublication, type BundleID, type BundleManifest, type ComponentManifest, type ComponentPublication } from "../workspace/component.ts"

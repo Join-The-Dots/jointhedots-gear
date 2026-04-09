@@ -1,8 +1,8 @@
-import Fs from 'fs'
-import Process from 'process'
-import Path from 'path'
-import ChildProcess from 'child_process'
-import { createRequire } from "module"
+import Fs from "node:fs"
+import Process from "node:process"
+import Path from "node:path"
+import ChildProcess from "node:child_process"
+import { createRequire } from "node:module"
 import { type CommandModule } from "yargs"
 
 const restart_always_on_change = true

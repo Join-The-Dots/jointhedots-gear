@@ -1,10 +1,10 @@
 import Path from "node:path"
 import Sharp from "sharp"
-import MIME from 'mime'
+import MIME from "mime"
 import { Library, matchComponentSelection, type AppEntry, type ChromeAppDescriptor, type ChromeAppManifest, type WebviewEntry } from "../workspace/workspace.ts"
 import { StorageFiles } from "../workspace/storage.ts"
 import { BuildTarget } from "./build-target.ts"
-import type { WebAppManifest } from 'web-app-manifest'
+import type { WebAppManifest } from "web-app-manifest"
 import { build_app_composable_host } from "./build-app-host.ts"
 import { DependencyDeduplicationPlugin } from "./helpers/emit-esmodules.ts"
 import { BundleManifestTask } from "./helpers/emit-bundle-manifest.ts"

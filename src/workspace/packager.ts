@@ -1,5 +1,5 @@
 import type { Bundle, Library } from "./workspace.ts"
-import ChildProcess from "child_process"
+import ChildProcess from "node:child_process"
 
 export interface LibraryPackager {
    discover_library(lib: Library): Promise<Bundle>

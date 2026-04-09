@@ -1,7 +1,6 @@
-import { URI } from 'vscode-uri'
 import type { DocumentationSchema, JSONSchema, ResourceEntry } from "../schema/schema.ts"
-import type { ComponentEntry } from './manifold.ts'
-import { ServiceAccessor, type ServiceType } from '../services/service-accessor.ts'
+import type { ComponentEntry } from "./manifold.ts"
+import { ServiceAccessor, type ServiceType } from "../services/service-accessor.ts"
 
 //-------------------------------------------------------------
 // Component model: distribuable unit providing services
@@ -124,38 +123,3 @@ export interface ComponentController {
 }
 
 export const ComponentControllerKey = ServiceAccessor.About<ComponentController, ComponentSchema>("component")
-
-//-------------------------------------------------------------
-// Component providers
-//-------------------------------------------------------------
-
-export type ComponentFilter = {
-   query: string
-   pattern: RegExp
-   keywords: string[]
-   tags: string[]
-   types: string[]
-   services: string[]
-}
-
-export interface IResourceLoader {
-   load_resource(uri: string): Promise<any>
-}
-
-export interface IComponentPublisher {
-   search_component_publications(filter: ComponentFilter): Promise<ComponentPublication[]>
-   get_component_publication(component_id: string): Promise<ComponentPublication>
-}
-
-export interface IComponentProvider extends IComponentPublisher {
-   get_component_manifest(component_id: string): Promise<ComponentManifest>
-   set_component_manifest(component_id: string, manifest: ComponentManifest): Promise<boolean>
-   add_component(manifest: ComponentManifest): Promise<ComponentPublication>
-   delete_component(component_id: string): Promise<boolean>
-}
-
-export interface IContentProvider {
-   check_content(uri: URI): Promise<string>
-   load_content(uri: URI): Promise<Blob>
-   store_content(content: Blob, uri: URI): Promise<boolean>
-}

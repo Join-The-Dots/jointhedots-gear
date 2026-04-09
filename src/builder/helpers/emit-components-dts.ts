@@ -3,7 +3,7 @@ import { makeComponentPublication, type ComponentManifest, type ComponentPublica
 import type { Bundle } from "../../workspace/workspace.ts"
 import { BuildTarget } from "../build-target.ts"
 import { BuildTask } from "./task.ts"
-import MIME from 'mime'
+import MIME from "mime"
 
 export class ComponentsDtsTask extends BuildTask {
    constructor(readonly target: BuildTarget, readonly bundle: Bundle) {

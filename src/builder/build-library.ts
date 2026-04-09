@@ -1,5 +1,5 @@
 import Path from "node:path"
-import ChildProcess from "child_process"
+import ChildProcess from "node:child_process"
 import { Library } from "../workspace/workspace.ts"
 import { StorageFiles } from "../workspace/storage.ts"
 import { BuildTarget } from "./build-target.ts"

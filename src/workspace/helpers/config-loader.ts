@@ -1,8 +1,8 @@
-import YAML from 'yaml'
-import TOML from 'toml'
-import Path from 'node:path'
+import YAML from "yaml"
+import TOML from "toml"
+import Path from "node:path"
 import Fsp from "node:fs/promises"
-import Fs from 'node:fs'
+import Fs from "node:fs"
 
 /** Supported config file extensions in precedence order */
 export const config_extensions = [".json", ".yaml", ".yml", ".toml"] as const

@@ -1,5 +1,5 @@
 import Path from "node:path"
-import MIME from 'mime'
+import MIME from "mime"
 import { type AssetsEntry, Library } from "../../workspace/workspace.ts"
 import { copyToStorageStream } from "../../workspace/storage.ts"
 import { BuildTask } from "./task.ts"

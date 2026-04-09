@@ -1,14 +1,14 @@
-import Fs from 'fs'
-import Os from 'os'
-import Path from 'path'
-import Ts from 'typescript'
-import { execFile } from 'child_process'
-import { promisify } from 'util'
+import Fs from "node:fs"
+import Os from "node:os"
+import Path from "node:path"
+import Ts from "typescript"
+import { execFile } from "node:child_process"
+import { promisify } from "node:util"
 import { BuildTask } from "./task.ts"
-import { BuildTarget } from '../build-target.ts'
-import { Library } from '../../workspace/workspace.ts'
-import { file } from '../../utils/file.ts'
-import { create_export_map, type ExportEntries } from '../../workspace/helpers/create-manifests.ts'
+import { BuildTarget } from "../build-target.ts"
+import { Library } from "../../workspace/workspace.ts"
+import { file } from "../../utils/file.ts"
+import { create_export_map, type ExportEntries } from "../../workspace/helpers/create-manifests.ts"
 
 const eol = Os.EOL
 const indent = "    "

@@ -5,7 +5,7 @@ import DotEnv from "dotenv"
 import { readJsonFile } from "./storage.ts"
 import { type BundleID, type BundleManifest, type ComponentManifest, type DistributedConfig } from "./component.ts"
 import type { WebAppManifest } from "web-app-manifest"
-import { computeNameHashID, makeNormalizedName, NameStyle } from "../utils/normalized-name.ts"
+import { computeNameHashID } from "../utils/normalized-name.ts"
 import { make_normalized_path } from "../utils/file.ts"
 import { Logger, Log } from "./helpers/logger.ts"
 import { discover_workspace } from "./helpers/discover-workspace.ts"
@@ -175,7 +175,7 @@ export class Library extends WorkspaceItem {
    }
    make_file_id(prefix: string, id: string): string {
       const devmode = true
-      const base = devmode ? makeNormalizedName(id, NameStyle.OBJECT) : computeNameHashID(id)
+      const base = devmode ? id.replace(/[^a-zA-Z0-9]+/g, "_") : computeNameHashID(id)
       return base ? prefix + "." + base : prefix
    }
    resolve_entry_path(entryId: string, baseDir: string): string {

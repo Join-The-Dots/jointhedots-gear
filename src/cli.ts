@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import Process from "node:process"
 import Yargs from "yargs"
-import { hideBin } from 'yargs/helpers'
+import { hideBin } from "yargs/helpers"
 import { command_run } from "./commands/run.ts"
 import { command_init } from "./commands/init.ts"
 import { command_install } from "./commands/install.ts"

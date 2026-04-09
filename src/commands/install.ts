@@ -1,5 +1,5 @@
-import Path from 'node:path'
-import Fs from 'node:fs'
+import Path from "node:path"
+import Fs from "node:fs"
 import { type CommandModule } from "yargs"
 import { open_workspace } from "../workspace/workspace.ts"
 import { makeComponentPublication, type BundleManifest, type ComponentPublication } from "../workspace/component.ts"

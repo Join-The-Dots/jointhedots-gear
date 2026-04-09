@@ -1,7 +1,8 @@
 import { URI, Utils } from "vscode-uri"
-import { type ComponentFilter, type ComponentManifest, type ComponentPublication, ComponentControllerKey, type IContentProvider, type IResourceLoader, type IComponentProvider } from "./components.ts"
+import { type ComponentManifest, type ComponentPublication, ComponentControllerKey } from "./components.ts"
 import { Log, queryLogInfos, queryLogObjects, type QueryLogResult } from "../logging/mod.ts"
 import { parseResourceEntry } from "./helpers.ts"
+import { ComponentProviderHub, type ComponentFilter, type IComponentProvider, type IContentProvider, type IResourceLoader } from "./provider.ts"
 
 export type ComponentErrorManifest = ComponentManifest & {
    type: "<error>"
@@ -298,7 +299,9 @@ export class ComponentsManifold {
    content_provider: IContentProvider = null
 
    constructor() {
-      /*this.content_provider = new StaticContentProvider()
+      /*
+      const componen_provider=new ComponentProviderHub()
+      this.content_provider = new StaticContentProvider()
       this.components_provider.add_provider(new StaticComponentProvider(this.content_provider))
       this.components_provider.add_provider(createLocalComponentProvider())
       this.resources_loader = new CommonResourceProvider(this.content_provider)*/
@@ -391,6 +394,7 @@ export async function saveComponent(component: ComponentEntry) {
    console.log("[Update Component]", component.id)
    const manifest = await component.fetch()
    const provider = ComponentsRegistry.components_provider
+   if (!provider) throw new Error(`No component provider`)
    await provider.add_component(manifest)
 
    if (component.loaded) {
@@ -418,6 +422,7 @@ export async function saveComponent(component: ComponentEntry) {
 export async function deleteComponent(id: string) {
    console.log("deleteComponent", id)
    const provider = ComponentsRegistry.components_provider
+   if (!provider) throw new Error(`No component provider`)
    if (await provider.delete_component(id)) {
       unregisterComponent(id)
    }
@@ -437,13 +442,17 @@ export function unregisterComponent(id: string) {
 }
 
 export async function searchComponentsPublications(filter: ComponentFilter): Promise<ComponentPublication[]> {
-   return ComponentsRegistry.components_provider.search_component_publications(filter)
+   const provider = ComponentsRegistry.components_provider
+   if (!provider) throw new Error(`No component provider`)
+   return provider.search_component_publications(filter)
 }
 
 export async function fetchComponentsPublications(components_ids: string[]): Promise<ComponentPublication[]> {
    const results: ComponentPublication[] = []
+   const provider = ComponentsRegistry.components_provider
+   if (!provider) throw new Error(`No component provider`)
    for (const id of components_ids) {
-      const cnx = await ComponentsRegistry.components_provider.get_component_publication(id)
+      const cnx = await provider.get_component_publication(id)
       if (cnx) {
          results.push(cnx)
       }

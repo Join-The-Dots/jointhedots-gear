@@ -1,6 +1,6 @@
-import Path from "path"
-import Fs from "fs"
-import { fileURLToPath } from "url"
+import Path from "node:path"
+import Fs from "node:fs"
+import { fileURLToPath } from "node:url"
 
 export const PackageRootDir = Path.resolve(fileURLToPath(import.meta.url), "../../..")
 

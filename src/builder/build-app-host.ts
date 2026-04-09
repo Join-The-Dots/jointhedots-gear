@@ -7,6 +7,7 @@ import { PWAPackageTask, WebviewTask, type BuildApplicationOptions } from "./bui
 import { makeComponentPublication, type BundleID, type BundleManifest, type ComponentManifest, type ComponentPublication } from "../workspace/component.ts"
 import { topologicalSort } from "../utils/graph-ordering.ts"
 import { BuildTask } from "./helpers/task.ts"
+import { ArtifactZipTask } from "./helpers/emit-artifact.ts"
 
 export class ShelveManifestTask extends BuildTask {
    constructor(readonly target: BuildTarget, readonly bundles: Bundle[]) {
@@ -179,6 +180,10 @@ export async function build_app_composable_host(opts: BuildApplicationOptions): 
       watch: opts.devserver ? true : opts.watch,
       clean: opts.clean,
    })
+
+   if (opts.artifactDir) {
+      target.finalTasks.push(new ArtifactZipTask(target, opts.artifactDir, target.name))
+   }
 
    target.log.info(`Build app: ${target.name}`)
    return target.build()

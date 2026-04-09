@@ -11,6 +11,7 @@ export class BuildTarget {
    esmodules = new ESModulesTask(this)
    assets = new AssetsTask(this)
    tasks: BuildTask[] = []
+   finalTasks: BuildTask[] = []
    transaction: IStorageTransaction = null
    readonly log: Log
    constructor(
@@ -96,6 +97,9 @@ export class BuildTarget {
       }
       else {
          await this.store()
+         for (const task of this.finalTasks) {
+            await this.chrona(task)
+         }
       }
    }
 }

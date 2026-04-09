@@ -9,6 +9,7 @@ import { build_app_composable_host } from "./build-app-host.ts"
 import { DependencyDeduplicationPlugin } from "./helpers/emit-esmodules.ts"
 import { BundleManifestTask } from "./helpers/emit-bundle-manifest.ts"
 import { BuildTask } from "./helpers/task.ts"
+import { ArtifactZipTask } from "./helpers/emit-artifact.ts"
 
 export type BuildApplicationOptions = {
    app: AppEntry
@@ -18,6 +19,7 @@ export type BuildApplicationOptions = {
    watch?: boolean
    clean?: boolean
    devserver?: string
+   artifactDir?: string
 }
 
 function collect_app_libraries(app: AppEntry): Library[] {
@@ -204,6 +206,10 @@ export async function build_app_monolith(opts: BuildApplicationOptions): Promise
       watch: opts.devserver ? true : opts.watch,
       clean: opts.clean,
    })
+
+   if (opts.artifactDir) {
+      target.finalTasks.push(new ArtifactZipTask(target, opts.artifactDir, target.name))
+   }
 
    target.log.info(`Build app: ${target.name}`)
    return target.build()

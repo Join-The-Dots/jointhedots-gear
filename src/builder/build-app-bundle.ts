@@ -8,6 +8,7 @@ import { PathQualifier } from "./helpers/path-helpers.ts"
 import { create_export_map } from "../workspace/helpers/create-manifests.ts"
 import { DependencyDeduplicationPlugin, collectLibraryGraph } from "./helpers/emit-esmodules.ts"
 import { BundleManifestTask } from "./helpers/emit-bundle-manifest.ts"
+import { ArtifactNpmTask } from "./helpers/emit-artifact.ts"
 
 export type BuildBundleOptions = {
    bundle: Bundle
@@ -16,6 +17,7 @@ export type BuildBundleOptions = {
    devmode: boolean
    watch: boolean
    clean: boolean
+   artifactDir?: string
 }
 
 export enum PathStatus {
@@ -225,6 +227,10 @@ export async function build_app_composable_bundle(opts: BuildBundleOptions): Pro
          watch: opts.watch,
          clean: opts.clean,
       })
+
+      if (opts.artifactDir) {
+         target.finalTasks.push(new ArtifactNpmTask(target, opts.artifactDir))
+      }
 
       target.log.info(`Build bundle: ${target.name}`)
       await target.build()

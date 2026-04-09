@@ -8,6 +8,7 @@ import { PackageManifestTask } from "./helpers/emit-package-manifest.ts"
 import { create_export_map } from "../workspace/helpers/create-manifests.ts"
 import { BundleManifestTask } from "./helpers/emit-bundle-manifest.ts"
 import { ComponentsDtsTask } from "./helpers/emit-components-dts.ts"
+import { ArtifactNpmTask } from "./helpers/emit-artifact.ts"
 
 export type BuildLibraryOptions = {
    library: Library
@@ -16,6 +17,7 @@ export type BuildLibraryOptions = {
    devmode: boolean
    watch: boolean
    clean: boolean
+   artifactDir?: string
 }
 
 export function create_library_target(opts: {
@@ -99,6 +101,10 @@ export async function build_library(opts: BuildLibraryOptions, packageDir?: stri
       watch: opts.watch,
       clean: opts.clean,
    })
+
+   if (opts.artifactDir) {
+      target.finalTasks.push(new ArtifactNpmTask(target, opts.artifactDir))
+   }
 
    target.log.info(`Build library: ${target.name}`)
    await target.build()

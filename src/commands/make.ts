@@ -15,6 +15,7 @@ type MakeOptions = {
    devmode?: boolean
    clean?: boolean
    dist?: string
+   artifactDir?: string
 }
 
 export function command_make(): CommandModule<any, MakeOptions & {
@@ -74,6 +75,10 @@ export function command_make(): CommandModule<any, MakeOptions & {
          .option("dist", {
             type: "string",
             default: "./dist",
+         })
+         .option("artifact-dir", {
+            type: "string",
+            describe: "Directory to write output artifacts (npm if package.json, zip otherwise)",
          }),
       handler: async (argv) => {
          const ws = await open_workspace({
@@ -124,6 +129,7 @@ export function command_make(): CommandModule<any, MakeOptions & {
             }
          }
 
+         const artifactDir = argv.artifactDir ? Path.resolve(argv.artifactDir) : undefined
          const pendings = []
 
          if (bundles.length > 0) {
@@ -136,6 +142,7 @@ export function command_make(): CommandModule<any, MakeOptions & {
                   devmode: argv.devmode,
                   watch: argv.watch,
                   clean: argv.clean || !argv.devmode,
+                  artifactDir,
                }))
             }
          }
@@ -151,6 +158,7 @@ export function command_make(): CommandModule<any, MakeOptions & {
                devmode: argv.devmode,
                watch: argv.watch,
                clean: argv.clean || !argv.devmode,
+               artifactDir,
             }))
          }
 
@@ -164,6 +172,7 @@ export function command_make(): CommandModule<any, MakeOptions & {
                devmode: argv.devmode,
                watch: argv.watch,
                clean: argv.clean || !argv.devmode,
+               artifactDir,
             }, argv.pack ? Path.resolve(argv.dist) : null))
          }
 

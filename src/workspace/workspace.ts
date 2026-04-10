@@ -174,8 +174,7 @@ export class Library extends WorkspaceItem {
       return null
    }
    make_file_id(prefix: string, id: string): string {
-      const devmode = true
-      const base = devmode ? id.replace(/[^a-zA-Z0-9]+/g, "_") : computeNameHashID(id)
+      const base = this.workspace.devmode ? id.replace(/[^a-zA-Z0-9]+/g, "_") : computeNameHashID(id)
       return base ? prefix + "." + base : prefix
    }
    resolve_entry_path(entryId: string, baseDir: string): string {

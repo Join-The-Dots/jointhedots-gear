@@ -141,10 +141,12 @@ export abstract class WorkspaceItem {
       this.log = workspace.logger.get(loggerId)
    }
    make_file_id(prefix: string, id: string): string {
-      const base = this.workspace.devmode ? id.replace(/[^a-zA-Z0-9]+/g, "_") : computeNameHashID(id)
+      const base = this.workspace.debugmode
+         ? id.replace(/[^a-zA-Z0-9]+/g, "_")
+         : computeNameHashID(id)
       return base ? prefix + "." + base : prefix
    }
-   abstract resolve_entry_path(entryId: string, baseDir: string): string 
+   abstract resolve_entry_path(entryId: string, baseDir: string): string
 }
 
 // Une librairie represente des plans de construction avec un ensemble de code source 
@@ -258,6 +260,7 @@ export class Workspace {
       readonly version: string,
       readonly path: string,
       readonly devmode: boolean,
+      readonly debugmode: boolean = false,
    ) {
       this.log = this.logger.get(`workspace:${name}`)
    }

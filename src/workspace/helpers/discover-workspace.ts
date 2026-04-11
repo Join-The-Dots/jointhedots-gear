@@ -21,9 +21,8 @@ function is_ignored_dir(ws: Workspace, path: string): boolean {
    return false
 }
 
-export async function discover_component(lib: Library, fpath: string) {
-   const { master } = lib
-   if (master.components.has(fpath)) {
+export async function discover_component(bundle: Bundle, fpath: string) {
+   if (bundle.components.has(fpath)) {
       return true
    }
    try {
@@ -34,18 +33,18 @@ export async function discover_component(lib: Library, fpath: string) {
          if (err) throw err
          if (!desc.apis && desc["services"]) {
             desc.apis = desc["services"] // Migrate renaming 'services' -> 'apis'
-            lib.log.warn(`Component '${desc.$id}' manifest shall rename 'services' -> 'apis'`)
+            bundle.log.warn(`Component '${desc.$id}' manifest shall rename 'services' -> 'apis'`)
          }
-         master.components.set(fpath, desc)
-         lib.log.info(`+ 🧩 component: ${desc.$id} ${desc.type ? `(${desc.type})` : ""}`)
+         bundle.components.set(fpath, desc)
+         bundle.log.info(`+ 🧩 component: ${desc.$id} ${desc.type ? `(${desc.type})` : ""}`)
          return true
       }
-      else if (master.path !== make_normalized_dirname(fpath)) {
-         lib.log.error(`invalid bundle component at ${fpath}`)
+      else if (bundle.path !== make_normalized_dirname(fpath)) {
+         bundle.log.error(`invalid bundle component at ${fpath}`)
       }
    }
    catch (e) {
-      lib.log.error(`invalid component at ${fpath}: ${e?.message}`)
+      bundle.log.error(`invalid component at ${fpath}: ${e?.message}`)
    }
    return false
 }
@@ -88,14 +87,12 @@ export async function discover_library_definitions(lib: Library, path: string, s
       const fstat = await Fsp.stat(fpath)
       if (fstat.isDirectory()) {
          if (!exclude_dirs.includes(fname)) {
-            if (await discover_bundle(lib, fpath) === Discovered.None) {
-               await discover_library_definitions(lib, fpath, true)
-            }
+            await discover_library_definitions(lib, fpath, true)
          }
       }
       else if (fstat.isFile()) {
          if (is_config_filename(fname, "component")) {
-            await discover_component(lib, fpath)
+            await discover_component(lib.master, fpath)
          }
          else if (is_config_filename(fname, "application")) {
             await discover_application(lib, fpath)
@@ -175,7 +172,7 @@ async function discover_library(ws: Workspace, location: string) {
    if (!lib.deps) throw new Error(`Lock file not found for '${lib.name}'`)
 
    // Discover side bundles from lock file
-   for (const dep_id in lib.deps.resolved_paths) {
+   for (const dep_id in lib.descriptor.dependencies) {
       const dep_path = lib.deps.resolved_paths[dep_id]
       await discover_bundle(lib, dep_path)
    }
@@ -230,7 +227,7 @@ async function discover_bundle(lib: Library, location: string) {
    if (bun_manif?.data?.components) {
       for (const pub of bun_manif.data.components) {
          const fpath = bun_path + "/" + (pub.ref ?? pub.id)
-         await discover_component(lib, fpath)
+         await discover_component(bun, fpath)
       }
    }
 

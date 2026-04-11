@@ -14,7 +14,7 @@ export class DefaultLibraryPackager implements LibraryPackager {
       // Collect library declaration
       await discover_library_definitions(lib, lib.path)
 
-      return lib.bundle
+      return lib.master
    }
 }
 export function setup_library_bundle(lib: Library) {
@@ -22,8 +22,8 @@ export function setup_library_bundle(lib: Library) {
    const manif = make_library_bundle_manifest(lib)
    let bun = lib.get_bundle(manif.$id)
    if (!bun) {
-      bun = new Bundle(manif, lib.path, ws, lib)
-      lib.bundle = bun
+      bun = new Bundle(manif, lib.path, lib, lib)
+      lib.master = bun
       lib.shelve.push(bun)
       lib.log.info(`+ 📦 bundle: ${bun.id} 🐣`)
       return bun

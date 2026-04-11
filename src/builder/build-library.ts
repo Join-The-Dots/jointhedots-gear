@@ -29,13 +29,13 @@ export function create_library_target(opts: {
    clean: boolean
 }): BuildTarget {
    const lib = opts.library
-   const target = new BuildTarget(lib.name, opts.storage, lib.workspace, opts.devmode == true, opts.watch == true, opts.clean == true)
+   const target = new BuildTarget(lib.name, opts.storage, lib, opts.devmode == true, opts.watch == true, opts.clean == true)
 
    // Prepare esm setup
    target.esmodules.set_root(lib.path)
 
    // Add bundle exporteds
-   const entries = create_export_map(lib, lib.bundle)
+   const entries = create_export_map(lib, lib.master)
    for (const exp_id in entries) {
       const exp = entries[exp_id]
       target.esmodules.add_entry(exp.basename, exp.source)
@@ -46,19 +46,19 @@ export function create_library_target(opts: {
 
    // Add library package.json
    target.tasks.push(new PackageManifestTask(target, lib, opts.version))
-   target.tasks.push(new ComponentsDtsTask(target, lib.bundle))
+   target.tasks.push(new ComponentsDtsTask(target, lib.master))
 
    // Add bundle content
-   const { bundle } = lib
-   if (bundle) {
+   const { master } = lib
+   if (master) {
 
       // Add bundle catalog
-      target.tasks.push(new BundleManifestTask(target, bundle))
+      target.tasks.push(new BundleManifestTask(target, master))
 
       // Add library components
-      for (const [path, desc] of bundle.components) {
+      for (const [path, desc] of master.components) {
          const baseDir = Path.dirname(path)
-         target.add_component(desc, baseDir, lib)
+         target.add_component(desc, baseDir, master)
       }
    }
 

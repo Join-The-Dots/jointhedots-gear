@@ -2,12 +2,10 @@ import Fs from "node:fs"
 import Fsp from "node:fs/promises"
 import { readJsonFile } from "../storage.ts"
 import { checkComponentManifest, type BundleManifest, type ComponentManifest } from "../component.ts"
-import { makeNormalizedName, NameStyle } from "../../utils/normalized-name.ts"
-import { create_bundle_manifest } from "./create-manifests.ts"
 import { Bundle, Library, Workspace, type AppDescriptor, type DeclarationDescriptor, type PackageDescriptor } from "../workspace.ts"
 import { file, make_canonical_path, make_normalized_dirname, make_normalized_path, make_relative_path } from "../../utils/file.ts"
 import { findConfigFile, is_config_filename, readConfigFile, readSingletonConfigFile } from "./config-loader.ts"
-import { read_lockfile } from "./lockfile.ts"
+import { read_lockfile, type PackageDepsInfo } from "./lockfile.ts"
 import { LoadLibraryPackager, type LibraryPackager } from "../packager.ts"
 import { DefaultLibraryPackager } from "../packagers/packager-standard.ts"
 
@@ -24,8 +22,8 @@ function is_ignored_dir(ws: Workspace, path: string): boolean {
 }
 
 export async function discover_component(lib: Library, fpath: string) {
-   const { bundle } = lib
-   if (bundle.components.has(fpath)) {
+   const { master } = lib
+   if (master.components.has(fpath)) {
       return true
    }
    try {
@@ -38,11 +36,11 @@ export async function discover_component(lib: Library, fpath: string) {
             desc.apis = desc["services"] // Migrate renaming 'services' -> 'apis'
             lib.log.warn(`Component '${desc.$id}' manifest shall rename 'services' -> 'apis'`)
          }
-         bundle.components.set(fpath, desc)
+         master.components.set(fpath, desc)
          lib.log.info(`+ 🧩 component: ${desc.$id} ${desc.type ? `(${desc.type})` : ""}`)
          return true
       }
-      else if (bundle.path !== make_normalized_dirname(fpath)) {
+      else if (master.path !== make_normalized_dirname(fpath)) {
          lib.log.error(`invalid bundle component at ${fpath}`)
       }
    }
@@ -152,7 +150,6 @@ async function discover_library(ws: Workspace, location: string) {
    ws.log.info(`+ 📚 library: ${lib.get_id()} (${make_relative_path(ws.path, location)})`)
 
    // Discover library-level search_directories, lockfile, and constants (walk up to workspace root)
-   let lockfile = null
    lib.constants = { ...ws.constants }
    for (let path = lib.path; ;) {
       const package_json = await readJsonFile(path + "/package.json")
@@ -168,24 +165,19 @@ async function discover_library(ws: Workspace, location: string) {
             }
          }
       }
-      if (!lockfile) {
-         lockfile = await read_lockfile(path)
+      if (!lib.deps) {
+         lib.deps = await read_lockfile(path)
       }
       const next_path = make_normalized_dirname(path)
       if (next_path === path) break
       path = next_path
    }
+   if (!lib.deps) throw new Error(`Lock file not found for '${lib.name}'`)
 
-   // Analyze lock file
-   if (lockfile) {
-      lib.resolved_versions = lockfile.resolved_versions
-      for (const dep_id in lockfile.resolved_versions) {
-         const dep_path = lib.resolved_versions[dep_id]
-         await discover_bundle(lib, dep_path)
-      }
-   }
-   else {
-      throw new Error(`Lock file not found for '${ws.name}'`)
+   // Discover side bundles from lock file
+   for (const dep_id in lib.deps.resolved_paths) {
+      const dep_path = lib.deps.resolved_paths[dep_id]
+      await discover_bundle(lib, dep_path)
    }
 
    // Load library packager
@@ -229,15 +221,15 @@ async function discover_bundle(lib: Library, location: string) {
       }
    }
 
-   const bun = new Bundle(bun_manif, lib.path, lib.workspace)
-   lib.bundle = bun
+   // Register bundle into library
+   const bun = new Bundle(bun_manif, lib.path, lib)
    lib.shelve.push(bun)
    lib.log.info(`+ 📦 bundle: ${bun.id} ⏬`)
 
    // Analyze library deployment manifest (supports json/yaml/yml/toml, singleton)
    if (bun_manif?.data?.components) {
       for (const pub of bun_manif.data.components) {
-         const fpath = lib.path + "/" + (pub.ref ?? pub.id)
+         const fpath = bun_path + "/" + (pub.ref ?? pub.id)
          await discover_component(lib, fpath)
       }
    }

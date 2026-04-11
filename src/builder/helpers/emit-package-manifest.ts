@@ -14,7 +14,7 @@ export class PackageManifestTask extends BuildTask {
    }
    async execute() {
       const { library, version } = this
-      const pkg = create_package_manifest(library, library.bundle, version)
+      const pkg = create_package_manifest(library, library.master, version)
       const tx = this.target.edit()
       tx.commitFile("package.json", JSON.stringify(pkg, null, 2))
    }

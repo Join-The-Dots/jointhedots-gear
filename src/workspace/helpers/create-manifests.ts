@@ -33,8 +33,8 @@ export function create_export_map(lib: Library, bun: Bundle): ExportEntries {
 
    if (bun) {
       for (const id in bun.distribueds) {
-         const basename = lib.make_file_id("redist", id)
-         const entry = lib.resolve_entry_path(id, lib.path)
+         const basename = bun.make_file_id("redist", id)
+         const entry = bun.resolve_entry_path(id, lib.path)
          exports[id] = {
             id,
             basename: basename,
@@ -101,7 +101,7 @@ export function create_package_manifest(lib: Library, bun: Bundle, build_version
    } as PackageDescriptor
 
    if (pkg_manif.dependencies) {
-      const resolved = lib.resolved_versions
+      const resolved = lib.deps.resolved_versions
       for (const dep in pkg_manif.dependencies) {
          if (pkg_manif.dependencies[dep] === "*") {
             const dep_resolved = resolved[dep]

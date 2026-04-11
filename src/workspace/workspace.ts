@@ -10,6 +10,7 @@ import { make_normalized_path } from "../utils/file.ts"
 import { Logger, Log } from "./helpers/logger.ts"
 import { discover_workspace } from "./helpers/discover-workspace.ts"
 import { create_bundle_manifest } from "./helpers/create-manifests.ts"
+import type { PackageDepsInfo } from "./helpers/lockfile.ts"
 
 export type FileID = string
 export type ModuleID = string // Location of esm file: ./{module_path}
@@ -131,7 +132,7 @@ export interface PackageDescriptor {
    [metadata: string]: any
 }
 
-export class WorkspaceItem {
+export abstract class WorkspaceItem {
    readonly log: Log
    constructor(
       readonly workspace: Workspace,
@@ -139,15 +140,20 @@ export class WorkspaceItem {
    ) {
       this.log = workspace.logger.get(loggerId)
    }
+   make_file_id(prefix: string, id: string): string {
+      const base = this.workspace.devmode ? id.replace(/[^a-zA-Z0-9]+/g, "_") : computeNameHashID(id)
+      return base ? prefix + "." + base : prefix
+   }
+   abstract resolve_entry_path(entryId: string, baseDir: string): string 
 }
 
 // Une librairie represente des plans de construction avec un ensemble de code source 
 export class Library extends WorkspaceItem {
-   bundle: Bundle = null
+   master: Bundle = null
    declarations = new Map<FileID, DeclarationDescriptor>()
    applications = new Map<FileID, AppDescriptor>()
    externals: Record<string, string> = {}
-   resolved_versions: Record<string, string> = {}
+   deps: PackageDepsInfo
    search_directories: FileID[] = []
    constants: Constants = {}
    shelve: Bundle[] = []
@@ -172,10 +178,6 @@ export class Library extends WorkspaceItem {
          if (bundle.alias === id) return bundle
       }
       return null
-   }
-   make_file_id(prefix: string, id: string): string {
-      const base = this.workspace.devmode ? id.replace(/[^a-zA-Z0-9]+/g, "_") : computeNameHashID(id)
-      return base ? prefix + "." + base : prefix
    }
    resolve_entry_path(entryId: string, baseDir: string): string {
       const fpath = make_normalized_path(Path.resolve(baseDir, entryId))
@@ -203,10 +205,10 @@ export class Bundle extends WorkspaceItem {
    constructor(
       public manifest: BundleManifest,
       readonly path: string,
-      readonly workspace: Workspace,
+      readonly library: Library,
       readonly source: Library = null,
    ) {
-      super(workspace, `bundle:${manifest.$id}`)
+      super(library.workspace, `bundle:${manifest.$id}`)
       this.configured = (source === null)
    }
    get id(): BundleID {
@@ -224,6 +226,15 @@ export class Bundle extends WorkspaceItem {
          this.configured = true
       }
       return this.exports?.[ref]
+   }
+   resolve_entry_path(entryId: string, baseDir: string): string {
+      const fpath = make_normalized_path(Path.resolve(baseDir, entryId))
+      if (entryId.startsWith(".")) return fpath
+
+      if (this.source) {
+         return this.source.resolve_entry_path(entryId, baseDir)
+      }
+      return null
    }
 }
 
@@ -252,7 +263,7 @@ export class Workspace {
    }
    get_bundle(id: string): Bundle {
       for (const lib of this.libraries) {
-         if (lib.bundle.id === id) return lib.bundle
+         if (lib.master.id === id) return lib.master
       }
       for (const lib of this.libraries) {
          const bun = lib.get_bundle(id)

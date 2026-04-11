@@ -44,8 +44,8 @@ export interface LogEntry {
 
 export class Log {
    readonly id: string
+   readonly logger: Logger
    private entries: LogEntry[] = []
-   private logger: Logger
 
    constructor(id: string, logger: Logger) {
       this.id = id

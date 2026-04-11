@@ -7,7 +7,7 @@ import * as esbuild from "esbuild"
 import { sassPlugin } from "esbuild-sass-plugin"
 import { PackageRootDir, resolve_normalized_suffixed_path } from "../../utils/file.ts"
 import type { Log } from "../../workspace/helpers/logger.ts"
-import { Library } from "../../workspace/workspace.ts"
+import { Library, WorkspaceItem } from "../../workspace/workspace.ts"
 import { computeNameHashID } from "../../utils/normalized-name.ts"
 import type { ResourceEntry } from "../../workspace/component.ts"
 import type { IStorageTransaction } from "../../workspace/storage.ts"
@@ -32,7 +32,7 @@ async function create_esbuild_context(
    devmode: boolean,
    onReady?: () => void
 ): Promise<esbuild.BuildContext> {
-   const ws = task.target.workspace
+   const { library } = task.target
 
    // Define modules mapping - using @jspm/core polyfills (same as Vite)
    const jspmPolyfills = Path.resolve(PackageRootDir, "node_modules/@jspm/core/nodelibs/browser")
@@ -66,7 +66,7 @@ async function create_esbuild_context(
       return result
    }
 
-   const tsconfig = new TSConfig(task.rootPath, ws.path)
+   const tsconfig = new TSConfig(task.rootPath, library.path)
 
    const modules_mapping: ESModuleResolverOptions = {
       task,
@@ -92,9 +92,9 @@ async function create_esbuild_context(
    }
 
    // Define constants
-   const workspace_constants = Object.keys(ws.constants).reduce((prev, key) => {
+   const constants = Object.keys(library.constants).reduce((prev, key) => {
       const name = `constants.${key}`
-      prev[name] = JSON.stringify(ws.constants[key])
+      prev[name] = JSON.stringify(library.constants[key])
       return prev
    }, {})
 
@@ -111,7 +111,7 @@ async function create_esbuild_context(
       splitting: true,
       treeShaking: true,
       write: false,
-      logLevel: getEsbuildLogLevel(ws.logger.mode),
+      logLevel: getEsbuildLogLevel(library.log.logger.mode),
       chunkNames: "chunk.[hash]",
       jsx: "automatic",
       jsxImportSource: "react",
@@ -122,7 +122,7 @@ async function create_esbuild_context(
          'global': 'globalThis',
          "process.browser": "true",
          "process.env.NODE_ENV": JSON.stringify(devmode ? "development" : "production"),
-         ...workspace_constants,
+         ...constants,
       },
       plugins: [
          ESModuleResolverPlugin(modules_mapping, tsconfig),
@@ -236,8 +236,8 @@ function copyAssets(task: ESModulesTask) {
 }
 
 export function StyleSheetPlugin(task: ESModulesTask) {
-   const workspacePath = task.target.workspace.path
-   const useTailwind = hasTailwindConfig(workspacePath)
+   const rootPath = task.target.library.path
+   const useTailwind = hasTailwindConfig(rootPath)
    if (useTailwind) {
       task.log.info(`+ 🎨 Tailwind CSS detected`)
    }
@@ -248,7 +248,7 @@ export function StyleSheetPlugin(task: ESModulesTask) {
          const plugins: postcss.AcceptedPlugin[] = []
          if (useTailwind) {
             const tailwindcss = (await import('@tailwindcss/postcss')).default
-            plugins.push(tailwindcss({ base: workspacePath }))
+            plugins.push(tailwindcss({ base: rootPath }))
          }
          plugins.push(copyAssets(task))
          const { css } = await postcss(plugins)
@@ -541,7 +541,7 @@ export function ESModuleResolverPlugin(opts: ESModuleResolverOptions, tsconfigPa
       name: 'esm-resolver',
       setup(build) {
          const { routeds = {}, replaceds = {}, task } = opts
-         const workspaceRoot = task.target.workspace.path
+         const rootPath = task.target.library.path
 
          build.onResolve({ filter: /.*/ }, async (args) => {
 
@@ -577,7 +577,7 @@ export function ESModuleResolverPlugin(opts: ESModuleResolverOptions, tsconfigPa
 
             // 3. Handle relative/absolute file paths (entry points and local imports)
             if (args.path.startsWith(".") || args.path.startsWith("/") || Path.isAbsolute(args.path)) {
-               const baseDir = args.resolveDir || workspaceRoot
+               const baseDir = args.resolveDir || rootPath
                const resolved = resolve_normalized_suffixed_path(baseDir, args.path)
                if (resolved) {
                   return { path: resolved, namespace: "file" }
@@ -604,7 +604,7 @@ export function ESModuleResolverPlugin(opts: ESModuleResolverOptions, tsconfigPa
             }
             const ext = Path.extname(args.path) || ".ts"
             const loader = internalLoaders[ext] ?? "ts"
-            return { contents, loader, resolveDir: workspaceRoot }
+            return { contents, loader, resolveDir: rootPath }
          })
       },
    }
@@ -636,20 +636,20 @@ export class ESModulesTask extends BuildTask {
       this.add_entry(name, id)
       return name
    }
-   add_resource_entry(resource: ResourceEntry, baseDir: string, library: Library): ResourceEntry {
+   add_resource_entry(resource: ResourceEntry, baseDir: string, origin: WorkspaceItem): ResourceEntry {
       if (typeof resource === "string") {
          const parts = resource.split("#")
-         const file = library.resolve_entry_path(parts[0], baseDir)
+         const file = origin.resolve_entry_path(parts[0], baseDir)
          if (file) {
             let named = this.imports[file]
             if (!named) {
-               named = library.make_file_id("lambda", file)
+               named = origin.make_file_id("lambda", file)
                this.add_entry(named, file)
             }
             return `./${named}.js#${parts[1] || "default"}`
          }
          else {
-            throw new Error(`${library.name}: Cannot resolve file: ${parts[0]}`)
+            origin.log.error(`Cannot resolve build resource file at: ${parts[0]}`)
          }
       }
       else {

@@ -1,13 +1,13 @@
 import Path from "node:path"
 import Sharp from "sharp"
 import MIME from "mime"
-import { Library, matchComponentSelection, type AppEntry, type ChromeAppDescriptor, type ChromeAppManifest, type WebviewEntry } from "../workspace/workspace.ts"
+import { Bundle, matchComponentSelection, type AppEntry, type ChromeAppDescriptor, type ChromeAppManifest, type WebviewEntry } from "../workspace/workspace.ts"
 import { StorageFiles } from "../workspace/storage.ts"
 import { BuildTarget } from "./build-target.ts"
 import type { WebAppManifest } from "web-app-manifest"
 import { build_app_composable_host } from "./build-app-host.ts"
 import { DependencyDeduplicationPlugin } from "./helpers/emit-esmodules.ts"
-import { BundleManifestTask } from "./helpers/emit-bundle-manifest.ts"
+import { ApplicationManifestTask } from "./helpers/emit-bundle-manifest.ts"
 import { BuildTask } from "./helpers/task.ts"
 import { ArtifactZipTask } from "./helpers/emit-artifact.ts"
 
@@ -22,28 +22,6 @@ export type BuildApplicationOptions = {
    artifactDir?: string
 }
 
-function collect_app_libraries(app: AppEntry): Library[] {
-   const libs: Library[] = [app.library]
-   function collect_library_deps(lib: Library) {
-      const ws = lib.workspace
-      const deps = {
-         ...lib.descriptor.dependencies,
-         ...lib.descriptor.peerDependencies,
-         ...lib.descriptor.optionalDependencies,
-      }
-      for (const depId in deps) {
-         const lib = ws.get_library(depId)
-         if (lib && !libs.includes(lib)) {
-            libs.push(lib)
-         }
-      }
-   }
-   for (let i = 0; i < libs.length; i++) {
-      collect_library_deps(libs[i])
-   }
-   return libs
-}
-
 export function create_application_monolith_target(opts: {
    app: AppEntry
    storage: StorageFiles
@@ -55,10 +33,9 @@ export function create_application_monolith_target(opts: {
 }): BuildTarget {
    const { app, version } = opts
    const { type, name, webviews, modules, assets, components } = app.descriptor
-   const lib = app.library
-   const target = new BuildTarget(name, opts.storage, lib.workspace, opts.devmode == true, opts.watch == true, opts.clean == true)
-   const libs = collect_app_libraries(app)
-   target.log.info(`+ 🧭 app-library-graph: ${libs.map(lib => `${lib.name}@${lib.descriptor.version}`).join(", ")}`)
+   const { library: lib } = app
+   const target = new BuildTarget(name, opts.storage, lib, opts.devmode == true, opts.watch == true, opts.clean == true)
+   target.log.info(`+ 📚 shelve: ${lib.shelve.map(b => b.id).join(", ")}`)
 
    // Prepare esm setup
    target.esmodules.set_root(lib.path)
@@ -91,13 +68,13 @@ export function create_application_monolith_target(opts: {
    for (const name in webviews) {
       const { title, favicon, entry } = webviews[name]
       const entry_name = lib.make_file_id("webview", name)
-      const entry_path = app.library.resolve_entry_path(entry, app.baseDir)
+      const entry_path = lib.resolve_entry_path(entry, app.baseDir)
       target.esmodules.add_entry(entry_name, entry_path)
 
       const webview = {
          ...webviews[name],
          entry: `./${entry_name}.js`,
-         favicon: favicon ? app.library.resolve_entry_path(favicon, app.baseDir) : null,
+         favicon: favicon ? lib.resolve_entry_path(favicon, app.baseDir) : null,
       }
       target.tasks.push(new WebviewTask(target, name, title || name, webview, html_injects))
 
@@ -108,7 +85,7 @@ export function create_application_monolith_target(opts: {
 
    // Add application modules
    for (const name in modules) {
-      const entry_path = app.library.resolve_entry_path(modules[name], app.baseDir)
+      const entry_path = lib.resolve_entry_path(modules[name], app.baseDir)
       if (!entry_path) {
          target.log.error(`Invalid module '${name}' path at ${entry_path}`)
       }
@@ -127,69 +104,64 @@ export function create_application_monolith_target(opts: {
    // Add application static assets
    if (Array.isArray(assets)) {
       for (const asset of assets) {
-         target.assets.add_entry(asset, app.baseDir, app.library)
+         target.assets.add_entry(asset, app.baseDir, lib)
       }
    }
 
-   // Add bundle content
-   const { bundle } = lib
-   if (bundle) {
 
-      // Add bundle manifest
-      target.tasks.push(new BundleManifestTask(target, bundle))
-
-      // Add workspace components
-      const added_components = new Map<string, { lib: Library, path: string }>()
-      for (const lib of libs) {
-         if (lib.bundle) {
-            for (const [path, desc] of lib.bundle.components) {
-               if (!matchComponentSelection(components, desc.selectors)) continue
-               const cid = desc.$id
-               const added = added_components.get(cid)
-               if (added) {
-                  target.log.error({
-                     id: "duplicate-component-skip",
-                     text: `skip duplicate component '${cid}'`,
-                     notes: [
-                        {
-                           title: "kept",
-                           text: `${added.lib.name}@${added.lib.descriptor.version}`,
-                           location: added.path,
-                        },
-                        {
-                           title: "skipped",
-                           text: `${lib.name}@${lib.descriptor.version}`,
-                           location: path,
-                        },
-                     ],
-                  })
-                  continue
-               }
-               const baseDir = Path.dirname(path)
-               target.add_component(desc, baseDir, lib)
-               added_components.set(cid, { lib, path })
-            }
+   // Add workspace components
+   const added_components = new Map<string, { bundle: Bundle, path: string }>()
+   for (const bundle of lib.shelve) {
+      for (const [path, desc] of bundle.components) {
+         if (!matchComponentSelection(components, desc.selectors)) continue
+         const cid = desc.$id
+         const added = added_components.get(cid)
+         if (added) {
+            target.log.error({
+               id: "duplicate-component-skip",
+               text: `skip duplicate component '${cid}'`,
+               notes: [
+                  {
+                     title: "kept",
+                     text: `${added.bundle.id}`,
+                     location: added.path,
+                  },
+                  {
+                     title: "skipped",
+                     text: `${bundle.id}`,
+                     location: path,
+                  },
+               ],
+            })
+            continue
          }
+         const baseDir = Path.dirname(path)
+         target.add_component(desc, baseDir, bundle)
+         added_components.set(cid, { bundle, path })
       }
-
    }
+
+   // Add bundle manifest
+   target.tasks.push(new ApplicationManifestTask(target, app.descriptor))
 
    // Add workspace assets
-   for (const lib of libs) {
-      for (const [path, desc] of lib.declarations) {
+   for (const bundle of lib.shelve) {
+      if (!bundle.source) continue
+      for (const [path, desc] of bundle.source.declarations) {
          if (!matchComponentSelection(components, desc.selectors)) continue
          if (desc.assets) {
             const baseDir = Path.dirname(path)
             for (const entry of desc.assets) {
-               target.assets.add_entry(entry, baseDir, lib)
+               target.assets.add_entry(entry, baseDir, bundle.source)
             }
          }
       }
    }
 
    // Register esbuild plugin for dependency deduplication (graph-based + singleton)
+   const bundleLibs = lib.shelve.map(b => b.source).filter(Boolean)
    const rootNodeModules = lib.search_directories[0] || Path.join(lib.path, 'node_modules')
-   target.esmodules.plugins.push(DependencyDeduplicationPlugin(libs, rootNodeModules, target.log))
+   target.esmodules.plugins.push(DependencyDeduplicationPlugin(bundleLibs, rootNodeModules, target.log))
    return target
 }
 

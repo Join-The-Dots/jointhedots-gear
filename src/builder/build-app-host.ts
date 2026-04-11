@@ -56,11 +56,9 @@ function create_application_composable_target(opts: {
    clean: boolean
 }): BuildTarget {
    const { app, bundles, version } = opts
-   const { type, name, webviews, modules, assets, components } = app.descriptor
-   const lib = app.library
-   const bundle = lib.bundle
-   const ws = lib.workspace
-   const target = new BuildTarget(name, opts.storage, ws, opts.devmode == true, opts.watch == true, opts.clean == true)
+   const { name, webviews, modules, components } = app.descriptor
+   const { library: lib } = app
+   const target = new BuildTarget(name, opts.storage, lib, opts.devmode == true, opts.watch == true, opts.clean == true)
 
    // Prepare esm setup
    target.esmodules.set_root(lib.path)
@@ -89,7 +87,7 @@ function create_application_composable_target(opts: {
 
       const webview = {
          ...webviews[name],
-         entry: `./${bundle.id}/${entry_name}.js`,
+         entry: `./${lib.master.id}/${entry_name}.js`,
          favicon: favicon ? app.library.resolve_entry_path(favicon, Path.dirname(app.baseDir)) : null,
       }
       target.tasks.push(new WebviewTask(target, name, title || name, webview, html_injects))
@@ -103,7 +101,7 @@ function create_application_composable_target(opts: {
    for (const name in modules) {
       if (name.endsWith(".js")) {
          const entry_name = lib.make_file_id("module", name.slice(0, -3))
-         target.esmodules.add_entry_typescript(`export * from "./${bundle.id}/${entry_name}.js"`, name.slice(0, -3))
+         target.esmodules.add_entry_typescript(`export * from "./${lib.master.id}/${entry_name}.js"`, name.slice(0, -3))
          if (opts.devserver) {
             target.log.info(`+ 🔌 module: ${name} : ${opts.devserver}/${name}`)
          }
@@ -131,13 +129,13 @@ function create_application_composable_target(opts: {
    }*/
 
    // Add workspace assets
-   for (const lib of ws.libraries) {
-      for (const [path, desc] of lib.declarations) {
+   for (const slib of lib.workspace.libraries) {
+      for (const [path, desc] of slib.declarations) {
          if (!matchComponentSelection(components, desc.selectors)) continue
          if (desc.assets) {
             const baseDir = Path.dirname(path)
             for (const entry of desc.assets) {
-               target.assets.add_entry(entry, baseDir, lib)
+               target.assets.add_entry(entry, baseDir, slib)
             }
          }
       }
@@ -148,12 +146,11 @@ function create_application_composable_target(opts: {
 
 export async function build_app_composable_host(opts: BuildApplicationOptions): Promise<void> {
    const { app, storage } = opts
-   const ws = app.library.workspace
+   const { library: lib } = app
    opts.storage.clean()
 
-   const shelveBundles = new BundleSelector(ws)
-   const { bundle } = app.library
-   if (bundle) shelveBundles.add(bundle)
+   const shelveBundles = new BundleSelector(lib.workspace)
+   if (lib.master) shelveBundles.add(lib.master)
 
    const shelvePendings = []
    for (const bundle of shelveBundles) {
@@ -167,7 +164,7 @@ export async function build_app_composable_host(opts: BuildApplicationOptions): 
       }))
    }
    if (shelveBundles.missing.length > 0) {
-      ws.log.warn(`Missing bundle dependencies: ${shelveBundles.missing.join(", ")}`)
+      lib.log.warn(`Missing bundle dependencies: ${shelveBundles.missing.join(", ")}`)
    }
 
    const target = create_application_composable_target({
@@ -220,7 +217,7 @@ export class BundleSelector {
       if (bun.source) {
          for (const depId in bun.source.descriptor?.dependencies) {
             const lib = this.workspace.get_library(depId)
-            if (lib?.bundle) this.add(lib.bundle)
+            if (lib?.master) this.add(lib.master)
          }
       }
       return this

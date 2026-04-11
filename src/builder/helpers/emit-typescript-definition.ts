@@ -323,7 +323,7 @@ export class TypescriptDefinitionTask extends BuildTask {
             project,
             prefix: lib.name + ":",
             exclude: ["node_modules/**/*"],
-            exports: create_export_map(lib, lib.bundle),
+            exports: create_export_map(lib, lib.master),
          })
          file.write.text(storage.getBaseDirFS() + "/types.d.ts", dts)
 

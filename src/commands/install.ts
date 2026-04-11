@@ -34,7 +34,7 @@ export function command_install(): CommandModule<any, {
          // Select all workspace bundles
          const selector = new BundleSelector(ws)
          for (const lib of ws.libraries) {
-            selector.add(lib.bundle)
+            selector.add(lib.master)
          }
          if (selector.missing.length > 0) {
             ws.log.warn(`Missing bundle dependencies: ${selector.missing.join(", ")}`)

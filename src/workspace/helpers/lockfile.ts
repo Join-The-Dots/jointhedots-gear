@@ -3,12 +3,12 @@ import Fsp from "node:fs/promises"
 import YAML from "yaml"
 import { readJsonFile } from "../storage.ts"
 
-export type LockFileInfo = {
+export type PackageDepsInfo = {
    resolved_versions: Record<string, string>
-   installed_locations: string[]
+   resolved_paths: Record<string, string>
 }
 
-export async function read_lockfile(dir: string): Promise<LockFileInfo | null> {
+export async function read_lockfile(dir: string): Promise<PackageDepsInfo | null> {
    const npm_path = dir + "/package-lock.json"
    if (Fs.existsSync(npm_path)) {
       return parse_npm_lockfile(await readJsonFile(npm_path))
@@ -24,29 +24,29 @@ export async function read_lockfile(dir: string): Promise<LockFileInfo | null> {
    return null
 }
 
-function parse_npm_lockfile(lock: any): LockFileInfo {
+function parse_npm_lockfile(lock: any): PackageDepsInfo {
    const resolved_versions: Record<string, string> = {}
-   const installed_locations: string[] = []
+   const resolved_paths: Record<string, string> = {}
    for (const location in lock.packages) {
       if (!location) continue
-      installed_locations.push(location)
       if (location.startsWith("node_modules/")) {
          let pkg = lock.packages[location]
          if (pkg.link) {
             pkg = lock.packages[pkg.resolved]
          }
          const name = location.replace(/^.*node_modules\//, "")
+         resolved_paths[name] = location
          if (pkg?.version) {
             resolved_versions[name] = pkg.version
          }
       }
    }
-   return { resolved_versions, installed_locations }
+   return { resolved_versions, resolved_paths }
 }
 
-function parse_pnpm_lockfile(lock: any): LockFileInfo {
+function parse_pnpm_lockfile(lock: any): PackageDepsInfo {
    const resolved_versions: Record<string, string> = {}
-   const locations = new Set<string>()
+   const resolved_paths: Record<string, string> = {}
    if (lock.packages) {
       for (const key in lock.packages) {
          const clean = key.startsWith("/") ? key.slice(1) : key
@@ -56,22 +56,22 @@ function parse_pnpm_lockfile(lock: any): LockFileInfo {
             const version = clean.slice(atIdx + 1).split("(")[0]
             if (name && version) {
                resolved_versions[name] = version
-               locations.add("node_modules/" + name)
+               resolved_paths[name] = "node_modules/" + name
             }
          }
       }
    }
    if (lock.importers) {
       for (const key in lock.importers) {
-         if (key !== ".") locations.add(key)
+         if (key !== ".") resolved_paths[key] = key
       }
    }
-   return { resolved_versions, installed_locations: [...locations] }
+   return { resolved_versions, resolved_paths }
 }
 
-function parse_yarn_lockfile(text: string): LockFileInfo {
+function parse_yarn_lockfile(text: string): PackageDepsInfo {
    const resolved_versions: Record<string, string> = {}
-   const locations = new Set<string>()
+   const resolved_paths: Record<string, string> = {}
    if (text.includes("__metadata:")) {
       const lock = YAML.parse(text)
       for (const key in lock) {
@@ -80,15 +80,15 @@ function parse_yarn_lockfile(text: string): LockFileInfo {
             const name = extract_package_name(key.split(",")[0].trim())
             if (name) {
                resolved_versions[name] = lock[key].version
-               locations.add("node_modules/" + name)
+               resolved_paths[name] = "node_modules/" + name
             }
          }
       }
    }
    else {
-      parse_yarn_classic(text, resolved_versions, locations)
+      parse_yarn_classic(text, resolved_versions, resolved_paths)
    }
-   return { resolved_versions, installed_locations: [...locations] }
+   return { resolved_versions, resolved_paths }
 }
 
 function extract_package_name(entry: string): string | null {
@@ -98,7 +98,7 @@ function extract_package_name(entry: string): string | null {
    return at > 0 ? entry.slice(0, at) : null
 }
 
-function parse_yarn_classic(text: string, resolved_versions: Record<string, string>, locations: Set<string>) {
+function parse_yarn_classic(text: string, resolved_versions: Record<string, string>, resolved_paths: Record<string, string>) {
    let current_name: string | null = null
    for (const line of text.split("\n")) {
       const trimmed = line.trim()
@@ -108,7 +108,7 @@ function parse_yarn_classic(text: string, resolved_versions: Record<string, stri
       else if (current_name && trimmed.startsWith("version ")) {
          const version = trimmed.slice(8).replace(/^"|"$/g, "")
          resolved_versions[current_name] = version
-         locations.add("node_modules/" + current_name)
+         resolved_paths[current_name] = "node_modules/" + current_name
          current_name = null
       }
    }

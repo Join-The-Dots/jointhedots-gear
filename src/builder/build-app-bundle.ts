@@ -38,7 +38,7 @@ export function create_bundle_target(opts: {
    clean: boolean
 }): BuildTarget {
    const { bundle, library: lib, storage } = opts
-   const target = new BuildTarget(bundle.id, storage, lib.workspace, opts.devmode == true, opts.watch == true, opts.clean == true)
+   const target = new BuildTarget(bundle.id, storage, lib, opts.devmode == true, opts.watch == true, opts.clean == true)
 
    // Prepare esm setup
    target.esmodules.set_root(lib.path)
@@ -50,7 +50,7 @@ export function create_bundle_target(opts: {
    target.tasks.push(new TypescriptDefinitionTask(target, lib))
 
    // Add bundle exporteds
-   const entries = create_export_map(lib, lib.bundle)
+   const entries = create_export_map(lib, lib.master)
    for (const exp_id in entries) {
       const exp = entries[exp_id]
       target.esmodules.add_entry(exp.basename, exp.source)
@@ -60,12 +60,12 @@ export function create_bundle_target(opts: {
    if (bundle) {
 
       // Add bundle manifest
-      target.tasks.push(new BundleManifestTask(target, lib.bundle))
+      target.tasks.push(new BundleManifestTask(target, bundle))
 
       // Add bundle components
       for (const [path, desc] of bundle.components) {
          const baseDir = Path.dirname(path)
-         target.add_component(desc, baseDir, lib)
+         target.add_component(desc, baseDir, bundle)
       }
    }
 
@@ -193,7 +193,7 @@ export function create_bundle_target(opts: {
             return {
                contents,
                loader: "js",
-               resolveDir: target.workspace.path,
+               resolveDir: lib.path,
             }
          })
 

@@ -1,5 +1,5 @@
 import { type ComponentID, type ComponentManifest } from "../workspace/component.ts"
-import { Library, Workspace } from "../workspace/workspace.ts"
+import { Bundle, Library } from "../workspace/workspace.ts"
 import type { Log } from "../workspace/helpers/logger.ts"
 import { ESModulesTask } from "./helpers/emit-esmodules.ts"
 import { type IStorageTransaction, type IStorageZone } from "../workspace/storage.ts"
@@ -17,12 +17,12 @@ export class BuildTarget {
    constructor(
       readonly name: string,
       readonly storage: IStorageZone,
-      readonly workspace: Workspace,
+      readonly library: Library,
       readonly devmode: boolean,
       readonly watch: boolean,
       readonly clean: boolean,
    ) {
-      this.log = workspace.logger.get(`build:${name}`)
+      this.log = library.log.logger.get(`build:${name}`)
    }
    edit(): IStorageTransaction {
       if (!this.transaction) this.transaction = this.storage.edit()
@@ -34,10 +34,11 @@ export class BuildTarget {
          this.transaction = null
       }
    }
-   add_component(descriptor: ComponentManifest, baseDir: string, library: Library) {
+   add_component(descriptor: ComponentManifest, baseDir: string, origin: Bundle): boolean {
       const id = descriptor.$id
       if (this.components.has(id)) {
-         throw new Error(createComponentDuplicateMessage(id, library))
+         this.log.error(createComponentDuplicateMessage(id, origin))
+         return false
       }
 
       const manifest = {
@@ -50,18 +51,19 @@ export class BuildTarget {
       if (descriptor.apis) {
          manifest.apis = {}
          for (const name in descriptor.apis) {
-            manifest.apis[name] = this.esmodules.add_resource_entry(descriptor.apis[name], baseDir, library)
+            manifest.apis[name] = this.esmodules.add_resource_entry(descriptor.apis[name], baseDir, origin)
          }
       }
 
       if (descriptor.resources) {
          manifest.resources = {}
          for (const name in descriptor.resources) {
-            manifest.resources[name] = this.esmodules.add_resource_entry(descriptor.resources[name], baseDir, library)
+            manifest.resources[name] = this.esmodules.add_resource_entry(descriptor.resources[name], baseDir, origin)
          }
       }
 
       this.components.set(id, manifest)
+      return true
    }
    private async chrona(task: BuildTask): Promise<void> {
       const name = task.constructor.name
@@ -104,10 +106,10 @@ export class BuildTarget {
    }
 }
 
-function createComponentDuplicateMessage(id: string, library: Library) {
+function createComponentDuplicateMessage(id: string, origin: Bundle) {
    const duplicates = []
    const libs = []
-   for (const bun of library.shelve) {
+   for (const bun of origin.library.shelve) {
       for (const [cpath, cmanifest] of bun.components.entries()) {
          if (cmanifest.$id === id) {
             duplicates.push(`\n - ${cpath}`)

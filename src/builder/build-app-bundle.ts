@@ -41,7 +41,7 @@ export function create_bundle_target(opts: {
    const target = new BuildTarget(bundle.id, storage, lib, opts.devmode == true, opts.watch == true, opts.clean == true)
 
    // Prepare esm setup
-   target.esmodules.set_root(lib.path)
+   target.modules.set_root(lib.path)
 
    // Add bundle package.json
    target.tasks.push(new PackageManifestTask(target, lib, opts.version))
@@ -53,7 +53,7 @@ export function create_bundle_target(opts: {
    const entries = create_export_map(lib, lib.master)
    for (const exp_id in entries) {
       const exp = entries[exp_id]
-      target.esmodules.add_entry(exp.basename, exp.source)
+      target.modules.add_entry(exp.basename, exp.source)
    }
 
    // Add bundle content
@@ -86,7 +86,7 @@ export function create_bundle_target(opts: {
          const { entry } = app.webviews[name]
          const entry_name = lib.make_file_id("webview", name)
          const esmodule_entry = lib.resolve_entry_path(entry, baseDir)
-         target.esmodules.add_entry(entry_name, esmodule_entry)
+         target.modules.add_entry(entry_name, esmodule_entry)
       }
    }
 
@@ -97,7 +97,7 @@ export function create_bundle_target(opts: {
          const entry_name = lib.make_file_id("module", name.slice(0, -3))
          const entry = lib.resolve_entry_path(app.modules[name], baseDir)
          if (name.endsWith(".js")) {
-            target.esmodules.add_entry(entry_name, entry)
+            target.modules.add_entry(entry_name, entry)
          }
          else {
             target.log.error(`Invalid module name '${name}' in ${name}`)
@@ -140,7 +140,7 @@ export function create_bundle_target(opts: {
    // TODO: traverse all workspace bundles to add their entrypoint has PathStatus.Dependency
 
    // Register esbuild plugin for external dependencies
-   target.esmodules.plugins.push({
+   target.modules.plugins.push({
       name: "externals",
       setup(build) {
          const externalBundleModules = new Map<string, string>()
@@ -207,7 +207,7 @@ export function create_bundle_target(opts: {
    // Register esbuild plugin for dependency deduplication (graph-based + singleton)
    const rootNodeModules = lib.search_directories[0] || Path.join(lib.path, 'node_modules')
    const libGraph = collectLibraryGraph(lib)
-   target.esmodules.plugins.push(DependencyDeduplicationPlugin(libGraph, rootNodeModules, target.log))
+   target.modules.plugins.push(DependencyDeduplicationPlugin(libGraph, rootNodeModules, target.log))
 
    return target
 }

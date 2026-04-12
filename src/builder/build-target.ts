@@ -8,7 +8,7 @@ import type { BuildTask } from "./helpers/task.ts"
 
 export class BuildTarget {
    components = new Map<ComponentID, ComponentManifest>()
-   esmodules = new ESModulesTask(this)
+   modules = new ESModulesTask(this)
    assets = new AssetsTask(this)
    tasks: BuildTask[] = []
    finalTasks: BuildTask[] = []
@@ -51,14 +51,14 @@ export class BuildTarget {
       if (descriptor.apis) {
          manifest.apis = {}
          for (const name in descriptor.apis) {
-            manifest.apis[name] = this.esmodules.add_resource_entry(descriptor.apis[name], baseDir, origin)
+            manifest.apis[name] = this.modules.add_resource_entry(descriptor.apis[name], baseDir, origin)
          }
       }
 
       if (descriptor.resources) {
          manifest.resources = {}
          for (const name in descriptor.resources) {
-            manifest.resources[name] = this.esmodules.add_resource_entry(descriptor.resources[name], baseDir, origin)
+            manifest.resources[name] = this.modules.add_resource_entry(descriptor.resources[name], baseDir, origin)
          }
       }
 
@@ -86,7 +86,7 @@ export class BuildTarget {
       }
 
       // Make esmodules
-      await this.chrona(this.esmodules)
+      await this.chrona(this.modules)
 
       // Trace time
       const buildTime = (Date.now() - buildStartTime) / 1000

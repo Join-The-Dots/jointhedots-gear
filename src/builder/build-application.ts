@@ -38,7 +38,7 @@ export function create_application_monolith_target(opts: {
    target.log.info(`+ 📚 shelve: ${lib.shelve.map(b => b.id).join(", ")}`)
 
    // Prepare esm setup
-   target.esmodules.set_root(lib.path)
+   target.modules.set_root(lib.path)
 
    // Generate hotreload assets
    const html_injects: string[] = []
@@ -69,7 +69,7 @@ export function create_application_monolith_target(opts: {
       const { title, favicon, entry } = webviews[name]
       const entry_name = lib.make_file_id("webview", name)
       const entry_path = lib.resolve_entry_path(entry, app.baseDir)
-      target.esmodules.add_entry(entry_name, entry_path)
+      target.modules.add_entry(entry_name, entry_path)
 
       const webview = {
          ...webviews[name],
@@ -91,7 +91,7 @@ export function create_application_monolith_target(opts: {
       }
       else if (name.endsWith(".js")) {
          const entry_name = name.slice(0, -3)
-         target.esmodules.add_entry(entry_name, entry_path)
+         target.modules.add_entry(entry_name, entry_path)
          if (opts.devserver) {
             target.log.info(`+ 🔌 module: ${name} : ${opts.devserver}/${name}`)
          }
@@ -161,7 +161,7 @@ export function create_application_monolith_target(opts: {
    // Register esbuild plugin for dependency deduplication (graph-based + singleton)
    const bundleLibs = lib.shelve.map(b => b.source).filter(Boolean)
    const rootNodeModules = lib.search_directories[0] || Path.join(lib.path, 'node_modules')
-   target.esmodules.plugins.push(DependencyDeduplicationPlugin(bundleLibs, rootNodeModules, target.log))
+   target.modules.plugins.push(DependencyDeduplicationPlugin(bundleLibs, rootNodeModules, target.log))
    return target
 }
 

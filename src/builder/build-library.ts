@@ -32,13 +32,13 @@ export function create_library_target(opts: {
    const target = new BuildTarget(lib.name, opts.storage, lib, opts.devmode == true, opts.watch == true, opts.clean == true)
 
    // Prepare esm setup
-   target.esmodules.set_root(lib.path)
+   target.modules.set_root(lib.path)
 
    // Add bundle exporteds
    const entries = create_export_map(lib, lib.master)
    for (const exp_id in entries) {
       const exp = entries[exp_id]
-      target.esmodules.add_entry(exp.basename, exp.source)
+      target.modules.add_entry(exp.basename, exp.source)
    }
 
    // Add library types.d.ts
@@ -73,8 +73,8 @@ export function create_library_target(opts: {
    }
 
    // Register esbuild plugin for external dependencies
-   target.esmodules.polyfilled = false
-   target.esmodules.plugins.push({
+   target.modules.polyfilled = false
+   target.modules.plugins.push({
       name: "externals",
       setup(build) {
          const lib_prefix = lib.name + "/"

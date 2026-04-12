@@ -61,7 +61,7 @@ function create_application_composable_target(opts: {
    const target = new BuildTarget(name, opts.storage, lib, opts.devmode == true, opts.watch == true, opts.clean == true)
 
    // Prepare esm setup
-   target.esmodules.set_root(lib.path)
+   target.modules.set_root(lib.path)
 
    // Generate hotreload assets
    const html_injects: string[] = []
@@ -101,7 +101,7 @@ function create_application_composable_target(opts: {
    for (const name in modules) {
       if (name.endsWith(".js")) {
          const entry_name = lib.make_file_id("module", name.slice(0, -3))
-         target.esmodules.add_entry_typescript(`export * from "./${lib.master.id}/${entry_name}.js"`, name.slice(0, -3))
+         target.modules.add_entry_typescript(`export * from "./${lib.master.id}/${entry_name}.js"`, name.slice(0, -3))
          if (opts.devserver) {
             target.log.info(`+ 🔌 module: ${name} : ${opts.devserver}/${name}`)
          }

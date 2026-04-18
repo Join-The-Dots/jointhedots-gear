@@ -28,7 +28,7 @@ export enum PathStatus {
    ExternalBundle = 4,
 }
 
-export function create_bundle_target(opts: {
+export function create_plugin_target(opts: {
    bundle: Bundle
    library: Library
    storage: IStorageZone
@@ -212,13 +212,13 @@ export function create_bundle_target(opts: {
    return target
 }
 
-export async function build_app_composable_bundle(opts: BuildBundleOptions): Promise<BuildTarget> {
+export async function build_app_composable_plugin(opts: BuildBundleOptions): Promise<BuildTarget> {
    const { bundle } = opts
    if (bundle.source) {
       const storage = opts.shelve.branch(bundle.id)
       storage.clean()
 
-      const target = create_bundle_target({
+      const target = create_plugin_target({
          bundle,
          library: bundle.source,
          storage: storage,

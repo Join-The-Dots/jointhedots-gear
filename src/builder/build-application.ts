@@ -5,7 +5,6 @@ import { Bundle, matchComponentSelection, type AppEntry, type ChromeAppDescripto
 import { StorageFiles } from "../workspace/storage.ts"
 import { BuildTarget } from "./build-target.ts"
 import type { WebAppManifest } from "web-app-manifest"
-import { build_app_composable_host } from "./build-app-host.ts"
 import { DependencyDeduplicationPlugin } from "./helpers/emit-esmodules.ts"
 import { ApplicationManifestTask } from "./helpers/emit-bundle-manifest.ts"
 import { BuildTask } from "./helpers/task.ts"
@@ -165,7 +164,7 @@ export function create_application_monolith_target(opts: {
    return target
 }
 
-export async function build_app_monolith(opts: BuildApplicationOptions): Promise<void> {
+export async function build_application(opts: BuildApplicationOptions): Promise<void> {
    const { app } = opts
    opts.storage.clean()
 
@@ -185,15 +184,6 @@ export async function build_app_monolith(opts: BuildApplicationOptions): Promise
 
    target.log.info(`Build app: ${target.name}`)
    return target.build()
-}
-
-export async function build_application(opts: BuildApplicationOptions): Promise<void> {
-   if (opts.app.descriptor.type === "composable") {
-      return build_app_composable_host(opts)
-   }
-   else {
-      return build_app_monolith(opts)
-   }
 }
 
 export class WebviewTask extends BuildTask {

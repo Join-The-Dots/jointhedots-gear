@@ -5,7 +5,7 @@ import { checkComponentManifest, type BundleManifest, type ComponentManifest } f
 import { Bundle, Library, Workspace, type AppDescriptor, type DeclarationDescriptor, type PackageDescriptor } from "../workspace.ts"
 import { file, make_canonical_path, make_normalized_dirname, make_normalized_path, make_relative_path } from "../../utils/file.ts"
 import { findConfigFile, is_config_filename, readConfigFile, readSingletonConfigFile } from "./config-loader.ts"
-import { read_lockfile, type PackageDepsInfo } from "./lockfile.ts"
+import { discover_packages_from_node_modules } from "./discover-packages.ts"
 import { LoadLibraryPackager, type LibraryPackager } from "../packager.ts"
 import { DefaultLibraryPackager } from "../packagers/packager-standard.ts"
 
@@ -163,7 +163,7 @@ async function discover_library(ws: Workspace, location: string) {
          }
       }
       if (!lib.deps) {
-         lib.deps = await read_lockfile(path)
+         lib.deps = await discover_packages_from_node_modules(path)
       }
       const next_path = make_normalized_dirname(path)
       if (next_path === path) break

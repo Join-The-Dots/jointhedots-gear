@@ -1,0 +1,41 @@
+{
+   "compilerOptions": {
+      "target": "es2022",
+      "strict": false,
+      "noImplicitThis": true,
+      "jsx": "react-jsx",
+      "lib": ["es2022", "dom", "dom.iterable"]
+   },
+   "nodeModulesDir": "auto",
+   "tasks": {
+      "compose-core": "deno --allow-all --watch=src src/cli.ts compose --devmode --port 3002 --ws ../jointhedots-core --dist ./dist/base",
+      "serve-mono": "deno --allow-all --watch=src src/cli.ts serve --app playground:ui --devmode --port 3002 --ws ../jointhedots-core",
+      "serve-host": "deno --allow-all --watch=src src/cli.ts serve --app playground:ui:host --devmode --port 3002 --ws ../jointhedots-core",
+      "serve-sfe": "deno --allow-all --watch=src src/cli.ts serve --app sfe-webapp --devmode --ws ../sf-explorer-app",
+      "serve-demo": "deno --allow-all --watch=src src/cli.ts serve --app sfe-demo --devmode --ws ../sf-explorer-demo",
+      "make-sfe": "deno --allow-all --watch=src src/cli.ts make --libs @sf-explorer/app --devmode --ws ../sf-explorer-app"
+   },
+   "imports": {
+      "dotenv": "npm:dotenv@~17.2.3",
+      "esbuild": "npm:esbuild@~0.27.2",
+      "esbuild-sass-plugin": "npm:esbuild-sass-plugin@~3.6.0",
+      "express": "npm:express@~5.2.1",
+      "json-schema": "npm:json-schema@^0.4.0",
+      "mime": "npm:mime@~4.1.0",
+      "postcss": "npm:postcss@~8.5.6",
+      "sass": "npm:sass@~1.97.2",
+      "semver": "npm:semver@~7.7.3",
+      "sharp": "npm:sharp@~0.34.5",
+      "toml": "npm:toml@^3.0.0",
+      "typescript": "npm:typescript@~5.9.3",
+      "vscode-uri": "npm:vscode-uri@^3.1.0",
+      "yaml": "npm:yaml@^2.8.2",
+      "yargs": "npm:yargs@~18.0.0",
+      "yargs/helpers": "npm:yargs@~18.0.0/helpers",
+      "zod": "npm:zod@^4.3.6",
+      "@deno/esbuild-plugin": "npm:@jsr/deno__esbuild-plugin@^1.2.1",
+      "@jspm/core": "npm:@jspm/core@^2.1.0",
+      "@tailwindcss/postcss": "npm:@tailwindcss/postcss@~4.1.3",
+      "@typescript/native-preview": "npm:@typescript/native-preview@^7.0.0-dev.20260310.1"
+   }
+}

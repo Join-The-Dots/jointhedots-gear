@@ -3,7 +3,7 @@ import Fs from "node:fs"
 import { type CommandModule } from "yargs"
 import { open_workspace } from "../workspace/workspace.ts"
 import { makeComponentPublication, type BundleManifest, type ComponentPublication } from "../workspace/component.ts"
-import { BundleSelector } from "../builder/build-app-host.ts"
+import { BundleSelector } from "../builder/build-app-base.ts"
 
 export function command_install(): CommandModule<any, {
    ws?: string

@@ -1,7 +1,7 @@
 import { Bundle, matchComponentSelection, Workspace, type AppEntry, type PackageDescriptor, } from "../workspace/workspace.ts"
 import { StorageFiles } from "../workspace/storage.ts"
 import { BuildTarget } from "./build-target.ts"
-import { build_app_composable_bundle } from "./build-app-bundle.ts"
+import { build_app_composable_plugin } from "./build-app-plugin.ts"
 import Path from "node:path"
 import { PWAPackageTask, WebviewTask, type BuildApplicationOptions } from "./build-application.ts"
 import { makeComponentPublication, type BundleID, type BundleManifest, type ComponentManifest, type ComponentPublication } from "../workspace/component.ts"
@@ -45,7 +45,7 @@ export class ShelveManifestTask extends BuildTask {
 }
 
 
-function create_application_composable_target(opts: {
+function create_application_composable_base(opts: {
    app: AppEntry
    bundles: Bundle[]
    storage: StorageFiles
@@ -144,7 +144,7 @@ function create_application_composable_target(opts: {
    return target
 }
 
-export async function build_app_composable_host(opts: BuildApplicationOptions): Promise<void> {
+export async function build_app_composable(opts: BuildApplicationOptions): Promise<void> {
    const { app, storage } = opts
    const { library: lib } = app
    opts.storage.clean()
@@ -154,7 +154,7 @@ export async function build_app_composable_host(opts: BuildApplicationOptions): 
 
    const shelvePendings = []
    for (const bundle of shelveBundles) {
-      shelvePendings.push(build_app_composable_bundle({
+      shelvePendings.push(build_app_composable_plugin({
          bundle,
          shelve: storage,
          version: opts.version,
@@ -167,7 +167,7 @@ export async function build_app_composable_host(opts: BuildApplicationOptions): 
       lib.log.warn(`Missing bundle dependencies: ${shelveBundles.missing.join(", ")}`)
    }
 
-   const target = create_application_composable_target({
+   const target = create_application_composable_base({
       app,
       bundles: await Promise.all(shelveBundles),
       storage: opts.storage,

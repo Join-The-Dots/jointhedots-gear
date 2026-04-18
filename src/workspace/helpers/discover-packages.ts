@@ -2,13 +2,27 @@ import Fs from "node:fs"
 import Fsp from "node:fs/promises"
 import YAML from "yaml"
 import { readJsonFile } from "../storage.ts"
+import { traverse_node_modules_package } from "./package-npm.ts"
 
 export type PackageDepsInfo = {
    resolved_versions: Record<string, string>
    resolved_paths: Record<string, string>
 }
 
-export async function read_lockfile(dir: string): Promise<PackageDepsInfo | null> {
+export async function discover_packages_from_node_modules(dir: string): Promise<PackageDepsInfo | null> {
+   const node_modules = dir + "/node_modules"
+   if (!Fs.existsSync(node_modules)) return null
+   const resolved_versions: Record<string, string> = {}
+   const resolved_paths: Record<string, string> = {}
+   const seen = new Set<string>()
+   await traverse_node_modules_package(dir, seen, (name, pkg, pkg_dir) => {
+      if (pkg.version) resolved_versions[name] = pkg.version
+      resolved_paths[name] = pkg_dir
+   })
+   return { resolved_versions, resolved_paths }
+}
+
+export async function discover_packages_from_lockfile(dir: string): Promise<PackageDepsInfo | null> {
    const npm_path = dir + "/package-lock.json"
    if (Fs.existsSync(npm_path)) {
       return parse_npm_lockfile(await readJsonFile(npm_path))

@@ -1,9 +1,8 @@
 import Path from "node:path"
 import { type CommandModule } from "yargs"
 import { StorageFiles } from "../workspace/storage.ts"
-import { type AppEntry, Bundle, Library, open_workspace } from "../workspace/workspace.ts"
+import { type AppEntry, Library, open_workspace } from "../workspace/workspace.ts"
 import { build_application } from "../builder/build-application.ts"
-import { build_app_composable_bundle } from "../builder/build-app-bundle.ts"
 import { build_library } from "../builder/build-library.ts"
 import { makeNormalizedName, NameStyle } from "../utils/normalized-name.ts"
 import { resolvePackageVersion } from "../workspace/helpers/package-npm.ts"
@@ -21,7 +20,6 @@ type MakeOptions = {
 export function command_make(): CommandModule<any, MakeOptions & {
    apps?: string
    libs?: string
-   bundles?: string
    ws?: string
 }> {
    return {
@@ -38,12 +36,6 @@ export function command_make(): CommandModule<any, MakeOptions & {
             type: "string",
             default: "",
             describe: "List of libraries to make, ex: lib1,lib2,..."
-         })
-         .option("bundles", {
-            type: "string",
-            alias: "buns",
-            default: "",
-            describe: "List of bundles to make, ex: lib1,lib2,..."
          })
          .option("watch", {
             type: "boolean",
@@ -106,20 +98,6 @@ export function command_make(): CommandModule<any, MakeOptions & {
             }
          }
 
-         const bundles: Bundle[] = []
-         if (argv.bundles === "*") {
-            for (const lib of ws.libraries) {
-               if (lib.master) bundles.push(lib.master)
-            }
-         }
-         else if (argv.bundles) {
-            for (const name of argv.bundles.split(",")) {
-               const bundle = ws.get_bundle(name)
-               if (bundle) bundles.push(bundle) 
-               else ws.log.error(`Bundle not found: ${name}`)
-            }
-         }
-
          let applications: AppEntry[] = []
          if (argv.apps) {
             for (const appname of argv.apps.split(",")) {
@@ -131,21 +109,6 @@ export function command_make(): CommandModule<any, MakeOptions & {
 
          const artifactDir = argv.artifactDir ? Path.resolve(argv.artifactDir) : undefined
          const pendings = []
-
-         if (bundles.length > 0) {
-            const shelve = new StorageFiles("shelve", Path.resolve(argv.dist, "shelve"))
-            for (const bundle of bundles) {
-               pendings.push(build_app_composable_bundle({
-                  bundle,
-                  shelve,
-                  version: version,
-                  devmode: argv.devmode,
-                  watch: argv.watch,
-                  clean: argv.clean || !argv.devmode,
-                  artifactDir,
-               }))
-            }
-         }
 
          for (const app of applications) {
             const { name } = app.descriptor

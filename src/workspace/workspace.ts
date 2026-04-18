@@ -10,7 +10,7 @@ import { make_normalized_path } from "../utils/file.ts"
 import { Logger, Log } from "./helpers/logger.ts"
 import { discover_workspace } from "./helpers/discover-workspace.ts"
 import { create_bundle_manifest } from "./helpers/create-manifests.ts"
-import type { PackageDepsInfo } from "./helpers/lockfile.ts"
+import type { PackageDepsInfo } from "./helpers/discover-packages.ts"
 
 export type FileID = string
 export type ModuleID = string // Location of esm file: ./{module_path}
@@ -47,10 +47,6 @@ export interface AppDescriptorBase<Manifest = never> {
 
 export type ChromeAppManifest = chrome.runtime.ManifestV3
 
-export interface ComposableAppDescriptor extends AppDescriptorBase {
-   type: "composable"
-}
-
 export interface ChromeAppDescriptor extends AppDescriptorBase<ChromeAppManifest> {
    type: "chrome"
 }
@@ -59,7 +55,7 @@ export interface WebAppDescriptor extends AppDescriptorBase<WebAppManifest> {
    type: "web"
 }
 
-export type AppDescriptor = ChromeAppDescriptor | WebAppDescriptor | ComposableAppDescriptor
+export type AppDescriptor = ChromeAppDescriptor | WebAppDescriptor
 
 export type AppEntry = {
    descriptor: AppDescriptor

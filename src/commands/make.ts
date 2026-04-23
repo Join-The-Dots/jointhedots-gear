@@ -74,7 +74,7 @@ export function command_make(): CommandModule<any, MakeOptions & {
          }),
       handler: async (argv) => {
          const ws = await open_workspace({
-            workspace_path: argv.ws,
+            workspace_path: argv.ws, 
             devmode: argv.devmode,
             ignored_directory: Path.resolve(argv.dist),
          })

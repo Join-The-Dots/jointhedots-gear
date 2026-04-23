@@ -308,7 +308,7 @@ export async function open_workspace(options: OpenWorkspaceOptions): Promise<Wor
 
    await discover_workspace(ws)
 
-   return ws
+   return ws 
 }
 
 function patch_constants_from_env(constants: Constants, devmode: boolean, parsedEnv: Record<string, string>): Constants {

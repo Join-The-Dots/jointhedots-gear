@@ -10,12 +10,9 @@ export type PackageDepsInfo = {
 }
 
 export async function discover_packages_from_node_modules(dir: string): Promise<PackageDepsInfo | null> {
-   const node_modules = dir + "/node_modules"
-   if (!Fs.existsSync(node_modules)) return null
    const resolved_versions: Record<string, string> = {}
    const resolved_paths: Record<string, string> = {}
-   const seen = new Set<string>()
-   await traverse_node_modules_package(dir, seen, (name, pkg, pkg_dir) => {
+   await traverse_node_modules_package(dir, (name, pkg, pkg_dir) => {
       if (pkg.version) resolved_versions[name] = pkg.version
       resolved_paths[name] = pkg_dir
    })

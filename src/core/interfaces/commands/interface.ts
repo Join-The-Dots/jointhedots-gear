@@ -1,6 +1,7 @@
 import { URI } from "vscode-uri"
-import { acquireComponent } from "../components/manifold.ts"
-import { Log } from "../logging/mod.ts"
+import { acquireComponent } from "../../components/manifold.ts"
+import { Log } from "../../logging/mod.ts"
+import { ServiceAccessor } from "../../services/service-accessor.ts"
 
 export type Serializable = string | number | boolean | null | Serializable[] | { [key: string]: Serializable }
 
@@ -30,9 +31,11 @@ export interface Command<C extends Cmdlet = Cmdlet> {
    signature?: string // Signed by emitter providing Authorization Token
 }
 
-export interface CommandsService {
+export interface ICommands {
    execute<C extends Cmdlet>(cmd: string, data: CmdPayload<C>): Promise<CmdResult<C>>
 }
+
+export const CommandsService = ServiceAccessor.About<ICommands, void>("commands")
 
 export async function executeCommand(cmd: Command) {
    console.log("executeCommand:", cmd.target)
@@ -40,7 +43,7 @@ export async function executeCommand(cmd: Command) {
    const comp = acquireComponent(uri.authority)
    if (uri.scheme === "command") {
       try {
-         const svc = await comp.fetchResource<CommandsService>("commands")
+         const svc = await CommandsService.fetch(comp)
          if (svc?.execute instanceof Function) {
             svc.execute(uri.path, cmd.payload)
          }

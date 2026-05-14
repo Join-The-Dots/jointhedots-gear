@@ -1,7 +1,7 @@
 import Fs from "node:fs"
 import Fsp from "node:fs/promises"
 import { readJsonFile } from "../storage.ts"
-import { checkComponentManifest, type BundleManifest, type ComponentManifest } from "../component.ts"
+import { checkComponentManifest, type BundleManifest, type ComponentManifest } from "../../core/mod-node.ts"
 import { Bundle, Library, Workspace, type AppDescriptor, type DeclarationDescriptor, type PackageDescriptor } from "../workspace.ts"
 import { file, make_canonical_path, make_normalized_dirname, make_normalized_path, make_relative_path } from "../../utils/file.ts"
 import { findConfigFile, is_config_filename, readConfigFile, readSingletonConfigFile } from "./config-loader.ts"
@@ -174,7 +174,9 @@ async function discover_library(ws: Workspace, location: string) {
    // Discover side bundles from lock file
    for (const dep_id in lib.descriptor.dependencies) {
       const dep_path = lib.deps.resolved_paths[dep_id]
-      await discover_bundle(lib, dep_path)
+      if (dep_path) {
+         await discover_bundle(lib, dep_path)
+      }
    }
 
    // Load library packager

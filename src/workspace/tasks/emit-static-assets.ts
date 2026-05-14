@@ -1,7 +1,7 @@
 import Path from "node:path"
 import MIME from "mime"
-import { type AssetsEntry, Library } from "../../workspace/workspace.ts"
-import { copyToStorageStream } from "../../workspace/storage.ts"
+import { type AssetsEntry, Library } from "../workspace.ts"
+import { copyToStorageStream } from "../storage.ts"
 import { BuildTask } from "./task.ts"
 
 export type AssetMapping = {

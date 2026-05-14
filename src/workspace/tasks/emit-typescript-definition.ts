@@ -5,10 +5,10 @@ import Ts from "typescript"
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import { BuildTask } from "./task.ts"
-import { BuildTarget } from "../build-target.ts"
-import { Library } from "../../workspace/workspace.ts"
+import { BuildTarget } from "../builders/target.ts"
+import { Library } from "../workspace.ts"
 import { file } from "../../utils/file.ts"
-import { create_export_map, type ExportEntries } from "../../workspace/helpers/create-manifests.ts"
+import { create_export_map, type ExportEntries } from "../helpers/create-manifests.ts"
 
 const eol = Os.EOL
 const indent = "    "

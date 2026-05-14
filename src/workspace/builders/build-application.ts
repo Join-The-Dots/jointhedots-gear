@@ -1,14 +1,14 @@
 import Path from "node:path"
 import Sharp from "sharp"
 import MIME from "mime"
-import { Bundle, matchComponentSelection, type AppEntry, type ChromeAppDescriptor, type ChromeAppManifest, type WebviewEntry } from "../workspace/workspace.ts"
-import { StorageFiles } from "../workspace/storage.ts"
-import { BuildTarget } from "./build-target.ts"
+import { Bundle, matchComponentSelection, type AppEntry, type ChromeAppDescriptor, type ChromeAppManifest, type WebviewEntry } from "../workspace.ts"
+import { StorageFiles } from "../storage.ts"
+import { BuildTarget } from "./target.ts"
 import type { WebAppManifest } from "web-app-manifest"
-import { DependencyDeduplicationPlugin } from "./helpers/emit-esmodules.ts"
-import { ApplicationManifestTask } from "./helpers/emit-bundle-manifest.ts"
-import { BuildTask } from "./helpers/task.ts"
-import { ArtifactZipTask } from "./helpers/emit-artifact.ts"
+import { DependencyDeduplicationPlugin } from "../tasks/emit-esmodules.ts"
+import { ApplicationManifestTask } from "../tasks/emit-bundle-manifest.ts"
+import { BuildTask } from "../tasks/task.ts"
+import { ArtifactZipTask } from "../tasks/emit-artifact.ts"
 
 export type BuildApplicationOptions = {
    app: AppEntry

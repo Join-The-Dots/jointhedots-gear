@@ -1,13 +1,13 @@
-import { Bundle, matchComponentSelection, Workspace, type AppEntry, type PackageDescriptor, } from "../workspace/workspace.ts"
-import { StorageFiles } from "../workspace/storage.ts"
-import { BuildTarget } from "./build-target.ts"
+import { Bundle, matchComponentSelection, Workspace, type AppEntry, type PackageDescriptor, } from "../workspace.ts"
+import { StorageFiles } from "../storage.ts"
+import { BuildTarget } from "./target.ts"
 import { build_app_composable_plugin } from "./build-app-plugin.ts"
 import Path from "node:path"
 import { PWAPackageTask, WebviewTask, type BuildApplicationOptions } from "./build-application.ts"
-import { makeComponentPublication, type BundleID, type BundleManifest, type ComponentManifest, type ComponentPublication } from "../workspace/component.ts"
-import { topologicalSort } from "../utils/graph-ordering.ts"
-import { BuildTask } from "./helpers/task.ts"
-import { ArtifactZipTask } from "./helpers/emit-artifact.ts"
+import { makeComponentPublication, type BundleID, type BundleManifest, type ComponentManifest, type ComponentPublication } from "../../core/mod-node.ts"
+import { topologicalSort } from "../../utils/graph-ordering.ts"
+import { BuildTask } from "../tasks/task.ts"
+import { ArtifactZipTask } from "../tasks/emit-artifact.ts"
 
 export class ShelveManifestTask extends BuildTask {
    constructor(readonly target: BuildTarget, readonly bundles: Bundle[]) {

@@ -1,21 +1,28 @@
-import { URI } from "vscode-uri"
-import { type ComponentManifest, type ComponentPublication } from "./components.ts"
-import { acquireComponent } from "./manifold.ts"
-import type { ResourceEntry, ResourceImport } from "../schema/schema.ts"
-import type { ComponentFilter } from "./provider.ts"
+import { type ComponentManifest, type ComponentPublication, type IComponentProvider } from "./components.ts"
+import { acquireComponent, ComponentEntry } from "./manifold.ts"
+import type { ComponentFilter } from "./publisher.ts"
+import { isNormalizedName, makeNormalizedName, NameStyle } from "../../utils/normalized-name.ts"
 
-export function parseComponentURI(ref: string): URI {
-   if (ref.startsWith("./")) {
-      const base = URI.parse(window.location.href)
-      const parts = base.path.split("/")
-      parts[parts.length - 1] = ref.slice(2)
-      return base.with({ path: parts.join("/"), query: "", fragment: "" })
+export function checkComponentManifest(manif: ComponentManifest, path: string): Error {
+   if (typeof manif.$id !== "string") {
+      return new Error(`Component shall have '$id' at: ${path}`)
    }
-   else if (ref.startsWith("/")) {
-      return URI.parse(window.location.href).with({ path: ref, query: "", fragment: "" })
+   if (!isNormalizedName(manif.$id)) {
+      return new Error(`Component have invalid '$id=${manif.$id}' suggest '${makeNormalizedName(manif.$id, NameStyle.OBJECT)}' at: ${path}`)
    }
-   else {
-      return URI.parse(ref)
+   return null
+}
+
+export function makeComponentPublication(manif: ComponentManifest): ComponentPublication {
+   return {
+      id: manif.$id,
+      type: manif.type,
+      icon: manif.icon,
+      title: manif.title || manif.$id,
+      services: manif.apis ? Object.keys(manif.apis) : [],
+      description: manif.description || "",
+      keywords: manif.keywords,
+      tags: manif.tags,
    }
 }
 
@@ -52,23 +59,57 @@ export async function createComponentPublication(manif: ComponentManifest): Prom
    }
 }
 
-export function parseResourceEntry(entry: ResourceEntry): ResourceImport {
-   if (typeof entry === "string") {
-      let [location, fragment] = entry.split("#", 2)
+//-------------------------------------------------------------
+// Component providers hub
+//-------------------------------------------------------------
 
-      // Make resource data
-      const result: ResourceImport = { type: "module", location }
-      if (fragment) {
-         const [identifier, query] = fragment.split("?", 2)
-         result.identifier = identifier
-         if (query) {
-            for (const kv of query.split("&")) {
-               const [k, v] = kv.split("=")
-               result[k] = v === undefined ? true : v
-            }
-         }
+export class ComponentProviderHub implements IComponentProvider {
+   constructor(readonly providers: IComponentProvider[] = []) {
+   }
+   add_provider(provider: IComponentProvider) {
+      this.providers.push(provider)
+   }
+   async get_component_publication(id: string): Promise<ComponentPublication> {
+      for (const provider of this.providers) {
+         const found = await provider.get_component_publication(id)
+         if (found) return found
+      }
+      return null
+   }
+   async search_component_publications(filter: ComponentFilter): Promise<ComponentPublication[]> {
+      const result = []
+      for (const provider of this.providers) {
+         const founds = await provider.search_component_publications(filter)
+         if (founds) result.push(...founds)
       }
       return result
    }
-   return entry as ResourceImport
+   async load_component(component: ComponentEntry): Promise<boolean> {
+      for (const provider of this.providers) {
+         if (await provider.load_component(component)) return true
+      }
+      return false
+   }
+
+   async set_component_manifest(component_id: string, manifest: ComponentManifest): Promise<boolean> {
+      for (const provider of this.providers) {
+         const done = await provider.set_component_manifest(component_id, manifest)
+         if (done) return true
+      }
+      return false
+   }
+   async add_component(manifest: ComponentManifest): Promise<ComponentPublication> {
+      for (const provider of this.providers) {
+         const done = await provider.add_component(manifest)
+         if (done) return done
+      }
+      return null
+   }
+   async delete_component(component_id: string): Promise<boolean> {
+      for (const provider of this.providers) {
+         const done = await provider.delete_component(component_id)
+         if (done) return true
+      }
+      return false
+   }
 }

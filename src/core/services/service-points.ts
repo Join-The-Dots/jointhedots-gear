@@ -1,4 +1,4 @@
-import { acquireComponent, ComponentsRegistry } from "../components/manifold.ts"
+import { acquireComponent, listenComponents } from "../components/manifold.ts"
 import { type ComponentID } from "../components/components.ts"
 import { getSettings, listenSettings, WriteMode } from "./settings.ts"
 import { type ILogDispatcher, Log, type LogObject } from "../logging/mod.ts"
@@ -102,7 +102,7 @@ export function unlistenServicePoints(handler: ServiceChangeHandler) {
    ServiceChangeHandlers.delete(handler)
 }
 
-ComponentsRegistry.listen((component) => {
+listenComponents((component) => {
    for (const service of ServicePoints.values()) {
       if (service.descriptor.providers?.includes(component.id)) {
          ServiceChangeHandlers.forEach(l => l(service))
@@ -116,7 +116,7 @@ async function fetchComponentsService<IService>(components_ids: string[], servic
       for (const component_id of components_ids) {
          const component = acquireComponent(component_id)
          if (await component.fetch()) {
-            const srv = await component.acquireResource(service).fetch()
+            const srv = await component.acquireInterface(service).fetch()
             if (srv) {
                services.push(srv)
             }

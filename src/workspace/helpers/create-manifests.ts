@@ -1,5 +1,5 @@
 import Path from "node:path"
-import { makeComponentPublication, type BundleManifest, type ComponentPublication } from "../component.ts"
+import { makeComponentPublication, type BundleManifest, type ComponentPublication } from "../../core/mod-node.ts"
 import type { Bundle, Library, PackageDescriptor } from "../workspace.ts"
 import { resolve_normalized_suffixed_path } from "../../utils/file.ts"
 import { getNormalizedKeys } from "../../utils/normalized-name.ts"

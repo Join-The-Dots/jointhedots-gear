@@ -1,8 +1,9 @@
 import { URI, Utils } from "vscode-uri"
-import { type ComponentManifest, type ComponentPublication, ComponentControllerKey } from "./components.ts"
+import { type ComponentManifest, type ComponentPublication, type IComponentProvider, ComponentControllerKey } from "./components.ts"
 import { Log, queryLogInfos, queryLogObjects, type QueryLogResult } from "../logging/mod.ts"
-import { parseResourceEntry } from "./helpers.ts"
-import { ComponentProviderHub, type ComponentFilter, type IComponentProvider, type IContentProvider, type IResourceLoader } from "./provider.ts"
+import { ComponentProviderHub } from "./helpers.ts"
+import { type ComponentFilter } from "./publisher.ts"
+import { loadInterface, parseInterfaceImport } from "./interfaces.ts"
 
 export type ComponentErrorManifest = ComponentManifest & {
    type: "<error>"
@@ -16,6 +17,7 @@ export type ComponentServiceGetter<Service = any> = (entry: ComponentEntry) => S
 export class ComponentEntry<Instance extends Object = any> {
    protected __instance__?: Instance = undefined
    manifest?: ComponentManifest = undefined
+   origin?: string // URI from where the component is located
    constructor(
       readonly id: string,
    ) {
@@ -49,7 +51,7 @@ export class ComponentEntry<Instance extends Object = any> {
    set instance(value: Instance) {
       this.__instance__ = value
       if (value instanceof Object) {
-         ComponentsRegistry.datamap.set(value, this)
+         datamap.set(value, this)
       }
       else if (value !== null) {
          this.__instance__ = null
@@ -62,21 +64,21 @@ export class ComponentEntry<Instance extends Object = any> {
       }
       return this.manifest as Manifest
    }
-   set<Manifest extends ComponentManifest = ComponentManifest>(manifest: Manifest) {
+   set<Manifest extends ComponentManifest = ComponentManifest>(manifest: Manifest, origin?: string) {
       this.manifest = manifest
+      this.origin = origin ?? this.origin
       return this
    }
    fetch<Manifest extends ComponentManifest = ComponentManifest>(): Promise<Manifest> {
-      let loading = ComponentsRegistry.loadings.get(this)
+      let loading = loadings.get(this)
       if (loading) return loading
 
       if (this.manifest === undefined) {
-         loading = ComponentsRegistry.components_provider.get_component_manifest(this.id).then(async (manifest) => {
-            if (manifest) {
-               if (manifest.type) {
-                  await acquireComponent(manifest.type).fetch()
+         loading = components_provider.load_component(this).then(async (found) => {
+            if (found) {
+               if (this.manifest.type) {
+                  await acquireComponent(this.manifest.type).fetch()
                }
-               this.manifest = manifest
             }
             else throw new Error(`Component '${this.id}' not found`)
             return this.manifest
@@ -96,11 +98,11 @@ export class ComponentEntry<Instance extends Object = any> {
          loading = Promise.resolve(this.manifest)
       }
 
-      ComponentsRegistry.loadings.set(this, loading)
+      loadings.set(this, loading)
       return loading
    }
    async install(): Promise<ComponentEntry> {
-      let installing = ComponentsRegistry.installings.get(this)
+      let installing = installings.get(this)
       if (installing) return installing
 
       if (this.instance === undefined) {
@@ -128,25 +130,25 @@ export class ComponentEntry<Instance extends Object = any> {
          installing = Promise.resolve(this)
       }
 
-      ComponentsRegistry.installings.set(this, installing)
+      installings.set(this, installing)
       return installing
    }
-   acquireResource(identifier: string): ComponentResource {
+   acquireInterface(identifier: string): ComponentInterface {
       const ref = `${this.id}#${identifier}`
-      let rc = ComponentsRegistry.resources.get(ref)
+      let rc = resources.get(ref)
       if (!rc) {
-         rc = new ComponentResource(this, identifier)
-         ComponentsRegistry.resources.set(ref, rc)
+         rc = new ComponentInterface(this, identifier)
+         resources.set(ref, rc)
       }
       return rc
    }
-   getResource(identifier: string): ComponentResource {
-      if (this.hasResource(identifier)) {
-         return this.acquireResource(identifier)
+   getInterface(identifier: string): ComponentInterface {
+      if (this.hasInterface(identifier)) {
+         return this.acquireInterface(identifier)
       }
       return null
    }
-   hasResource(identifier: string): boolean {
+   hasInterface(identifier: string): boolean {
       const { manifest } = this
       if (manifest?.apis?.[identifier]) {
          return true
@@ -154,18 +156,18 @@ export class ComponentEntry<Instance extends Object = any> {
       else if (manifest?.type) {
          const type = acquireComponent(manifest.type)
          if (type) {
-            return type?.hasResource(`component.${identifier}`)
+            return type?.hasInterface(`component.${identifier}`)
          }
       }
       return false
    }
-   async getResourceAsync(identifier: string): Promise<ComponentResource> {
+   async getInterfaceAsync(identifier: string): Promise<ComponentInterface> {
       if (this.manifest === undefined) await this.fetch()
-      return this.getResource(identifier)
+      return this.getInterface(identifier)
    }
-   async fetchResource<T = any>(identifier: string): Promise<T> {
+   async fetchInterface<T = any>(identifier: string): Promise<T> {
       if (this.manifest === undefined) await this.fetch()
-      return this.getResource(identifier)?.fetch<T>()
+      return this.getInterface(identifier)?.fetch<T>()
    }
    getLogStats() {
       return queryLogInfos(this.id)
@@ -175,78 +177,50 @@ export class ComponentEntry<Instance extends Object = any> {
    }
 }
 
-// Component resource
-export class ComponentResource {
+// Component interface
+export class ComponentInterface {
    entry: any = undefined
-   identifier: string = undefined
    constructor(
       readonly component: ComponentEntry,
-      readonly resource: string,
+      readonly identifier: string,
    ) {
       component.fetch()
    }
    get valid(): boolean {
-      return this.identifier !== undefined && this.component.valid
+      return this.entry !== undefined && this.component.valid
    }
    get loaded(): boolean {
-      return this.identifier !== undefined
+      return this.entry !== undefined
    }
    async fetch<T = any>(): Promise<T> {
-      if (this.identifier === undefined) {
-         let loading = ComponentsRegistry.loadings.get(this)
+      if (this.entry === undefined) {
+         let loading = loadings.get(this)
          if (loading) return loading
 
          loading = new Promise(async (resolve) => {
             const { component } = this
             try {
+
                // Fetch manifest with resource catalog
                if (component.installed === false) {
                   await component.install()
                }
 
                // Fetch resource data
-               const { manifest } = component
-               const entry = parseResourceEntry(manifest.apis?.[this.resource])
-               const type = entry?.type
-               if (type === "module") {
-                  this.entry = await ComponentsRegistry.resources_loader.load_resource(entry.location)
-                  this.identifier = entry.identifier
-               }
-               /*else if (type === "api.rest") {
-                  this.entry = __import_RESTService(entry as RESTServiceImport, component)
-                  this.identifier = null
-               }*/
-               else if (manifest.type) {
-                  const controller = acquireComponent(manifest.type)
-                  const resource = controller.getResource(`component.${this.resource}`)
-                  if (resource) {
-                     const getter = await resource.fetch<ComponentServiceGetter>()
-                     if (getter) this.entry = await getter(this.component)
-                     else this.entry = null
-                     this.identifier = null
-                  }
-                  else {
-                     throw new Error(`Cannot provide resource '${this.resource}'`)
-                  }
-               }
-               else {
-                  throw new Error(`Cannot load resource '${this.resource}': ${JSON.stringify(entry)}`)
-               }
-               const entrypoint = this.get()
-               if (entrypoint instanceof Object) {
-                  ComponentsRegistry.datamap.set(entrypoint, this)
+               this.entry = await loadComponentInterface(component, this.identifier)
+               if (this.entry instanceof Object) {
+                  datamap.set(this.entry, this)
                }
             }
             catch (e) {
-               console.error(`Cannot install service api '${this.resource}' of '${component.id}':`, e)
+               console.error(`Cannot install service api '${this.identifier}' of '${component.id}':`, e)
                this.entry = null
-               this.identifier = null
             }
             resolve(this.get())
-            ComponentsRegistry.loadings.set(this, null)
+            loadings.set(this, null)
          })
 
-         ComponentsRegistry.loadings.set(this, loading)
+         loadings.set(this, loading)
          return loading
       }
       else {
@@ -254,71 +228,42 @@ export class ComponentResource {
       }
    }
    get<T = any>(): T {
-      if (this.entry) {
-         if (this.identifier !== null) {
-            return this.entry?.[this.identifier]
-         }
-         else {
-            return this.entry
-         }
-      }
-      return undefined
+      return this.entry
    }
    set(data: any) {
       this.entry = data
-      this.identifier = null
    }
    get spec() {
-      const norm = this.resource.split(".")[0]
+      const norm = this.identifier.split(".")[0]
       return this.component.manifest?.specs?.[norm]
    }
    get url(): string {
-      const ref = this.component.manifest?.apis?.[this.resource]
+      const ref = this.component.manifest?.apis?.[this.identifier]
+      const href = globalThis?.location?.href
+      if (!href) return null
       if (typeof ref === "string") {
-         const base = URI.parse(window.location.href).with({ fragment: null })
+         const base = URI.parse(href).with({ fragment: null })
          const uri = Utils.joinPath(base, "..", ref.split("#")[0])
+         return uri.toString()
+      }
+      if (ref && typeof ref === "object" && typeof ref["location"] === "string") {
+         const base = URI.parse(href).with({ fragment: null })
+         const uri = Utils.joinPath(base, "..", ref["location"])
          return uri.toString()
       }
       return null
    }
 }
 
-export type ComponentsListener = (target: ComponentEntry) => void
+const components = new Map<string, ComponentEntry>()
+const resources = new Map<string, ComponentInterface>()
+const datamap = new WeakMap<any, ComponentInterface | ComponentEntry>()
 
-export class ComponentsManifold {
-   components = new Map<string, ComponentEntry>()
-   resources = new Map<string, ComponentResource>()
-   datamap = new WeakMap<any, ComponentResource | ComponentEntry>()
+const loadings = new Map<any, Promise<any>>()
+const installings = new Map<any, Promise<ComponentEntry>>()
+const listeners = new Set<ComponentsListener>()
 
-   loadings = new Map<any, Promise<any>>()
-   installings = new Map<any, Promise<ComponentEntry>>()
-   listeners = new Set<ComponentsListener>()
-
-   components_provider: IComponentProvider = null
-   resources_loader: IResourceLoader = null
-   content_provider: IContentProvider = null
-
-   constructor() {
-      /*
-      const componen_provider=new ComponentProviderHub()
-      this.content_provider = new StaticContentProvider()
-      this.components_provider.add_provider(new StaticComponentProvider(this.content_provider))
-      this.components_provider.add_provider(createLocalComponentProvider())
-      this.resources_loader = new CommonResourceProvider(this.content_provider)*/
-   }
-   listen(l: ComponentsListener) {
-      this.listeners.add(l)
-      return l
-   }
-   unlisten(l: ComponentsListener) {
-      this.listeners.delete(l)
-   }
-   notifyError(subject: ComponentEntry, error: Error) {
-
-   }
-}
-
-export const ComponentsRegistry = new ComponentsManifold()
+const components_provider = new ComponentProviderHub()
 
 acquireComponent("<error>").set({
    $id: "<error>",
@@ -326,17 +271,36 @@ acquireComponent("<error>").set({
    title: "Define invalid component",
 })
 
+export type ComponentsListener = (target: ComponentEntry) => void
+
+export function listenComponents(l: ComponentsListener) {
+   listeners.add(l)
+   return l
+}
+
+export function unlistenComponents(l: ComponentsListener) {
+   listeners.delete(l)
+}
+
+export function notifyError(subject: ComponentEntry, error: Error) {
+
+}
+
+export function addComponentProvider(provider: IComponentProvider) {
+   components_provider.add_provider(provider)
+}
+
 export function getDefaultComponent() {
    return acquireComponent("log:application")
 }
 
 export function getComponentFromData(data: any, is_static?: boolean): ComponentEntry {
    if (data instanceof Object) {
-      const target = ComponentsRegistry.datamap.get(data) || data
+      const target = datamap.get(data) || data
       if (target instanceof ComponentEntry) {
          return target
       }
-      if (target instanceof ComponentResource) {
+      if (target instanceof ComponentInterface) {
          return target.component
       }
       if (!is_static && data["getComponent"] instanceof Function) {
@@ -347,31 +311,41 @@ export function getComponentFromData(data: any, is_static?: boolean): ComponentE
 }
 
 export function acquireComponent(id: string): ComponentEntry {
-   let obj = ComponentsRegistry.components.get(id) as ComponentEntry
+   let obj = components.get(id) as ComponentEntry
    if (!obj && typeof id === "string") {
       obj = new ComponentEntry(id)
-      ComponentsRegistry.components.set(id, obj)
+      components.set(id, obj)
    }
    return obj
 }
 
 export function acquireFutureComponent(manifest: ComponentManifest): ComponentEntry {
    const id = manifest.$id
-   let obj = ComponentsRegistry.components.get(id) as ComponentEntry
+   let obj = components.get(id) as ComponentEntry
    if (!obj && typeof id === "string") {
       obj = new ComponentEntry(id)
       obj.manifest = manifest
       obj.instance = null
-      ComponentsRegistry.components.set(id, obj)
+      components.set(id, obj)
    }
    return obj
 }
 
-export function acquireResource(ref: string): ComponentResource {
+export function setupComponent(manif: ComponentManifest, apis: Record<string, any>) {
+   const comp = acquireComponent(manif.$id).set(manif)
+   manif.apis = manif.apis ?? {}
+   for (const api in apis) {
+      manif.apis[api] = { type: "internal" }
+      comp.acquireInterface(api).set(apis[api])
+   }
+   return comp
+}
+
+export function acquireResource(ref: string): ComponentInterface {
    const parts = ref.split("#")
    if (parts.length === 2) {
       const entry = acquireComponent(parts[0])
-      return entry?.acquireResource(parts[1])
+      return entry?.acquireInterface(parts[1])
    }
    return null
 }
@@ -385,7 +359,7 @@ export function resolveRelativeComponent(ref: string, from: ComponentEntry): Com
 
 export async function saveComponentManifest(manifest: ComponentManifest) {
    const component = acquireComponent(manifest.$id)
-   ComponentsRegistry.loadings.delete(component)
+   loadings.delete(component)
    component.manifest = manifest
    return saveComponent(component)
 }
@@ -393,7 +367,8 @@ export async function saveComponentManifest(manifest: ComponentManifest) {
 export async function saveComponent(component: ComponentEntry) {
    console.log("[Update Component]", component.id)
    const manifest = await component.fetch()
-   const provider = ComponentsRegistry.components_provider
+
+   const provider = components_provider
    if (!provider) throw new Error(`No component provider`)
    await provider.add_component(manifest)
 
@@ -410,9 +385,9 @@ export async function saveComponent(component: ComponentEntry) {
             }
          }
          if (component.instance instanceof Object) {
-            ComponentsRegistry.datamap.set(component.instance, component)
+            datamap.set(component.instance, component)
          }
-         ComponentsRegistry.listeners.forEach(l => l(component))
+         listeners.forEach(l => l(component))
       }
    }
 
@@ -421,7 +396,7 @@ export async function saveComponent(component: ComponentEntry) {
 
 export async function deleteComponent(id: string) {
    console.log("deleteComponent", id)
-   const provider = ComponentsRegistry.components_provider
+   const provider = components_provider
    if (!provider) throw new Error(`No component provider`)
    if (await provider.delete_component(id)) {
       unregisterComponent(id)
@@ -429,27 +404,27 @@ export async function deleteComponent(id: string) {
 }
 
 export function unregisterComponent(id: string) {
-   const component = ComponentsRegistry.components.get(id)
+   const component = components.get(id)
    if (component) {
       component.set<ComponentErrorManifest>({
          $id: component.id,
          type: "<error>",
          message: `Component deleted`,
       })
-      ComponentsRegistry.listeners.forEach(l => l(component))
-      ComponentsRegistry.components.delete(id)
+      listeners.forEach(l => l(component))
+      components.delete(id)
    }
 }
 
 export async function searchComponentsPublications(filter: ComponentFilter): Promise<ComponentPublication[]> {
-   const provider = ComponentsRegistry.components_provider
+   const provider = components_provider
    if (!provider) throw new Error(`No component provider`)
    return provider.search_component_publications(filter)
 }
 
 export async function fetchComponentsPublications(components_ids: string[]): Promise<ComponentPublication[]> {
    const results: ComponentPublication[] = []
-   const provider = ComponentsRegistry.components_provider
+   const provider = components_provider
    if (!provider) throw new Error(`No component provider`)
    for (const id of components_ids) {
       const cnx = await provider.get_component_publication(id)
@@ -468,4 +443,29 @@ export function failedComponentPublication(id: string, title?: string): Componen
       id: id,
       title: title ? title : "! Not found: " + id,
    }
+}
+
+async function loadComponentInterface(component: ComponentEntry, identifier: string) {
+   const api = component.manifest.apis?.[identifier]
+   if (api) {
+      return loadInterface(api, component)
+   }
+   else {
+      const { manifest } = component
+      if (manifest?.type) {
+         const controller = acquireComponent(manifest.type)
+         const resource = controller.getInterface(`component.${identifier}`)
+         if (resource) {
+            const getter = await resource.fetch<ComponentServiceGetter>()
+            if (getter) return getter(component)
+         }
+         else {
+            throw new Error(`Component '${manifest?.type}' cannot provide resource '${identifier}'`)
+         }
+      }
+      else {
+         throw new Error(`Cannot load resource '${identifier}' from singleton component`)
+      }
+   }
+   return null
 }

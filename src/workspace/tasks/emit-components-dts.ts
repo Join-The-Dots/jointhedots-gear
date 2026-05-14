@@ -1,9 +1,7 @@
-import { join } from "node:path"
-import { makeComponentPublication, type ComponentManifest, type ComponentPublication } from "../../workspace/component.ts"
-import type { Bundle } from "../../workspace/workspace.ts"
-import { BuildTarget } from "../build-target.ts"
+import { type ComponentManifest } from "../../core/mod-node.ts"
+import type { Bundle } from "../workspace.ts"
+import { BuildTarget } from "../builders/target.ts"
 import { BuildTask } from "./task.ts"
-import MIME from "mime"
 
 export class ComponentsDtsTask extends BuildTask {
    constructor(readonly target: BuildTarget, readonly bundle: Bundle) {

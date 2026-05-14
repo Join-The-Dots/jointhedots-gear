@@ -2,7 +2,7 @@ import Path from "node:path"
 import FS from "node:fs"
 import ChildProcess from "node:child_process"
 import { BuildTask } from "./task.ts"
-import type { BuildTarget } from "../build-target.ts"
+import type { BuildTarget } from "../builders/target.ts"
 
 export class ArtifactNpmTask extends BuildTask {
    constructor(target: BuildTarget, readonly outputDir: string) {

@@ -1,8 +1,7 @@
-import { type BundleManifest } from "../component.ts"
+import { type BundleManifest } from "../../core/mod-node.ts"
 import { Bundle, Library } from "../workspace.ts"
-import { readSingletonConfigFile } from "../helpers/config-loader.ts"
 import { type LibraryPackager } from "../packager.ts"
-import { discover_component, discover_library_definitions } from "../helpers/discover-workspace.ts"
+import { discover_library_definitions } from "../helpers/discover-workspace.ts"
 import { makeNormalizedName, NameStyle } from "../../utils/normalized-name.ts"
 
 export class DefaultLibraryPackager implements LibraryPackager {
@@ -48,7 +47,6 @@ function make_library_bundle_manifest(lib: Library): BundleManifest {
    return {
       $id: makeNormalizedName(collect_declarations_field(lib, "$id", lib.name), NameStyle.OBJECT),
       type: "bundle",
-      name: lib.name,
       icon: collect_declarations_field(lib, "icon", ""),
       title: collect_declarations_field(lib, "title", lib.name),
       tags: collect_declarations_field(lib, "tags", lib.descriptor?.tags),
@@ -56,6 +54,7 @@ function make_library_bundle_manifest(lib: Library): BundleManifest {
       description: collect_declarations_field(lib, "description", lib.descriptor?.description),
       selectors: collect_declarations_field(lib, "selectors", undefined),
       data: {
+         name: lib.name,
          package: lib.get_id(),
          alias: collect_declarations_field(lib, "alias", lib.name),
          namespaces: collect_declarations_field(lib, "namespaces", []),

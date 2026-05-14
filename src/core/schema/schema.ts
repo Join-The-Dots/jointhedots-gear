@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { InterfaceLinkSchema } from "../mod-node.ts"
 
 // =============================================================================
 // Base Types
@@ -87,20 +88,6 @@ export const SecurityGuardSchema = z.union([
    z.object({
       rule: z.string()
    }).passthrough()
-])
-
-// =============================================================================
-// Resource Types
-// =============================================================================
-
-export const ResourceLinkSchema = z.string()
-
-export const ResourceEntrySchema = z.union([
-   ResourceLinkSchema,
-   z.object({
-      type: z.string(),
-      data: z.any().optional()
-   })
 ])
 
 // =============================================================================
@@ -223,9 +210,9 @@ export const JSONSchemaCustomSchema = z.object({
    $error: z.union([z.string(), z.instanceof(Error)]).optional(),
 
    // Programming interface
+   apis: z.record(z.string(), InterfaceLinkSchema).optional(),
    args: z.array(z.lazy(() => JSONSchemaSchema)).optional(),
    placeholder: z.boolean().optional(),
-   resources: z.record(z.string(), ResourceEntrySchema).optional(),
    security: SecurityGuardSchema.optional(),
    "allow-origin": z.string().optional(),
 
@@ -293,13 +280,6 @@ export type TemplateSchema = z.infer<typeof TemplateSchema>
 export type DockingSchema = z.infer<typeof DockingSchema>
 export type SecurityRule = z.infer<typeof SecurityRuleSchema>
 export type SecurityGuard = z.infer<typeof SecurityGuardSchema>
-export type ResourceEntry = z.infer<typeof ResourceEntrySchema>
-export type ResourceImport = {
-   type: string
-   location?: string
-   identifier?: string
-   [key: string]: any
-}
 export type JSONSchemaStandard = z.infer<typeof JSONSchemaStandardSchema>
 export type JSONSchemaCustom = z.infer<typeof JSONSchemaCustomSchema>
 export type ServiceSchema = z.infer<typeof ServiceSchemaSchema>

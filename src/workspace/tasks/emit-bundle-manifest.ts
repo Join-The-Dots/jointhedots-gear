@@ -1,6 +1,6 @@
-import { makeComponentPublication, type BundleManifest, type ComponentPublication } from "../../workspace/component.ts"
-import { Library, type AppDescriptor, type Bundle } from "../../workspace/workspace.ts"
-import { BuildTarget } from "../build-target.ts"
+import { makeComponentPublication, type BundleManifest, type ComponentPublication } from "../../core/mod-node.ts"
+import { Library, type AppDescriptor, type Bundle } from "../workspace.ts"
+import { BuildTarget } from "../builders/target.ts"
 import { BuildTask } from "./task.ts"
 import MIME from "mime"
 
@@ -39,11 +39,12 @@ export class ApplicationManifestTask extends BaseManifestTask {
       const { target, app } = this
       await this.write_manifest({
          $id: target.name,
-         name: app.name,
          icon: app.icon,
-         title: app.title,
+         title: app.title || app.name,
          description: app.description,
-         data: {},
+         data: {
+            name: app.name,
+         },
       })
    }
 }

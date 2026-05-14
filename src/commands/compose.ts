@@ -2,7 +2,7 @@ import Path from "node:path"
 import { type CommandModule } from "yargs"
 import { StorageFiles } from "../workspace/storage.ts"
 import { type Bundle, open_workspace, type Workspace } from "../workspace/workspace.ts"
-import { build_app_composable_plugin } from "../builder/build-app-plugin.ts"
+import { build_app_composable_plugin } from "../workspace/builders/build-app-plugin.ts"
 import { resolvePackageVersion } from "../workspace/helpers/package-npm.ts"
 import Express from "express"
 

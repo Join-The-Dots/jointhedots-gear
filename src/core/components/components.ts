@@ -1,12 +1,25 @@
-import type { DocumentationSchema, JSONSchema, ResourceEntry } from "../schema/schema.ts"
+import type { DocumentationSchema, JSONSchema } from "../schema/schema.ts"
 import type { ComponentEntry } from "./manifold.ts"
 import { ServiceAccessor, type ServiceType } from "../services/service-accessor.ts"
+import type { IComponentPublisher, InterfaceReference } from "../mod-node.ts"
 
 //-------------------------------------------------------------
 // Component model: distribuable unit providing services
 //-------------------------------------------------------------
 
 export type ComponentID = string
+export type BundleID = ComponentID
+
+export type ComponentSpec = {
+   "view"?: {
+      properties: Record<string, JSONSchema>
+   }
+   "component"?: {
+      services: string[]
+      attributes: Record<string, JSONSchema>
+   }
+   [customSpec: string]: any
+}
 
 // Component publication
 export interface ComponentPublication {
@@ -40,16 +53,18 @@ export type ComponentManifest<Data extends any = unknown> = {
    description?: string
    keywords?: string[] // Keywords helping for user searching (into publication)
    tags?: string[] // Tags for filtering helping (into publication)
+   selectors?: string[]
    doc?: DocumentationSchema
 
    // Service Specifications
-   specs?: Record<ComponentServiceID, any>
+   specs?: Record<ComponentServiceID, ComponentSpec>
 
    // Service Interfaces
-   apis?: Record<ComponentServiceID, ResourceEntry> // Resources providing specific services interfaces
+   apis?: Record<ComponentServiceID, InterfaceReference> // Resources providing specific services interfaces
+   resources?: Record<string, InterfaceReference> // Resources catalog with undefined interface
 
    // Configuration
-   data?: Data
+   data?: Data // Reserved to component derived from a driver component
 }
 
 /** Configuration for a distributed package */
@@ -63,6 +78,7 @@ export interface DistributedConfig {
 }
 
 export type BundleManifest = ComponentManifest<{
+   name?: string
    // Bundle alias (name that can help to connect it to library name)
    alias?: string
    // Bundle library/package origin
@@ -121,5 +137,22 @@ export interface ComponentController {
    // Descriptor management
    checkDescriptor(descriptor: ComponentManifest): Promise<ComponentChecking>
 }
+
+//-------------------------------------------------------------
+// Component provider: components registry accessor
+//-------------------------------------------------------------
+
+export interface IComponentProvider extends IComponentPublisher {
+   load_component(component: ComponentEntry): Promise<boolean>
+   set_component_manifest(component_id: string, manifest: ComponentManifest): Promise<boolean>
+   add_component(manifest: ComponentManifest): Promise<ComponentPublication>
+   delete_component(component_id: string): Promise<boolean>
+}
+
+//-------------------------------------------------------------
+// Component Services
+//-------------------------------------------------------------
+
+export const ComponentProviderKey = ServiceAccessor.About<ComponentController, ComponentSchema>("component")
 
 export const ComponentControllerKey = ServiceAccessor.About<ComponentController, ComponentSchema>("component")

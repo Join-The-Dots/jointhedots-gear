@@ -6,12 +6,13 @@ import postcss from "postcss"
 import * as esbuild from "esbuild"
 import { sassPlugin } from "esbuild-sass-plugin"
 import { PackageRootDir, resolve_normalized_suffixed_path } from "../../utils/file.ts"
-import type { Log } from "../../workspace/helpers/logger.ts"
-import { Library, WorkspaceItem } from "../../workspace/workspace.ts"
+import type { Log, Message } from "../../utils/logger.ts"
+import { Library, WorkspaceItem } from "../workspace.ts"
 import { computeNameHashID } from "../../utils/normalized-name.ts"
-import type { ResourceEntry } from "../../workspace/component.ts"
-import type { IStorageTransaction } from "../../workspace/storage.ts"
+import type { InterfaceReference } from "../../core/mod-node.ts"
+import type { IStorageTransaction } from "../storage.ts"
 import { BuildTask } from "./task.ts"
+import { toNumberedLine } from "../../utils/utils.ts"
 
 const VirtualOutDir = process.platform === 'win32' ? 'X:\\' : '/_/'
 
@@ -27,10 +28,9 @@ function getEsbuildLogLevel(mode: "normal" | "debug" | "verbose"): esbuild.LogLe
    }
 }
 
-async function create_esbuild_context(
+function create_esbuild_context(
    task: ESModulesTask,
    devmode: boolean,
-   onReady?: () => void
 ): Promise<esbuild.BuildContext> {
    const { library } = task.target
 
@@ -128,7 +128,7 @@ async function create_esbuild_context(
          ESModuleResolverPlugin(modules_mapping, tsconfig),
          ...task.plugins,
          StyleSheetPlugin(task),
-         StoragePlugin(task, onReady),
+         StoragePlugin(task),
       ],
       loader: {
          '.jpg': 'file',
@@ -288,7 +288,7 @@ function hasTailwindConfig(workspacePath: string): boolean {
    return false
 }
 
-export function StoragePlugin(task: ESModulesTask, onReady?: () => void): esbuild.Plugin {
+export function StoragePlugin(task: ESModulesTask): esbuild.Plugin {
    return {
       name: "dipatch-files",
       setup: (build) => {
@@ -298,11 +298,25 @@ export function StoragePlugin(task: ESModulesTask, onReady?: () => void): esbuil
             buildStartTime = Date.now()
          })
          build.onEnd(async (result) => {
+            function enrichError(error: esbuild.Message): Message {
+               const file = error.location?.file
+               if (file.startsWith("internal:")) {
+                  const id = file.slice("internal:".length)
+                  const src = task.internals.get(id)!
+                  return {
+                     id: "",
+                     location: error.location,
+                     text: `[internal source: ${id}]`,
+                     notes: [{ title: "source", text: "->\n" + toNumberedLine(src) }],
+                  }
+               }
+               return error
+            }
             if (result.errors.length > 0) {
                task.log.error(`Build failed with ${result.errors.length} error(s)`)
             }
             for (const error of result.errors) {
-               task.log.error(error)
+               task.log.error(enrichError(error))
             }
             for (const warning of result.warnings) {
                task.log.warn(warning)
@@ -325,10 +339,14 @@ export function StoragePlugin(task: ESModulesTask, onReady?: () => void): esbuil
                const storeTime = (Date.now() - storeStart) / 1000
                const buildTime = (Date.now() - buildStartTime) / 1000
                task.log.info(`Store ES graph in ${result.outputFiles.length} file(s) (compile: ${buildTime.toFixed(2)}s, store: ${storeTime.toFixed(2)}s)`)
+               void task.target.notify({
+                  type: "ready",
+                  target: task.target,
+               })
             }
-            if (onReady) {
-               onReady()
-               onReady = null
+            if (task.onFirstReady) {
+               task.onFirstReady()
+               task.onFirstReady = null
             }
             return null
          })
@@ -620,6 +638,7 @@ export class ESModulesTask extends BuildTask {
    transaction: IStorageTransaction = null
    polyfilled: boolean = true
    rootPath: string = null
+   onFirstReady: (() => void) | null = null
 
    set_root(path: string) {
       this.rootPath = path
@@ -636,7 +655,7 @@ export class ESModulesTask extends BuildTask {
       this.add_entry(name, id)
       return name
    }
-   add_resource_entry(resource: ResourceEntry, baseDir: string, origin: WorkspaceItem): ResourceEntry {
+   add_resource_entry(resource: InterfaceReference, baseDir: string, origin: WorkspaceItem): InterfaceReference {
       if (typeof resource === "string") {
          const parts = resource.split("#")
          const file = origin.resolve_entry_path(parts[0], baseDir)
@@ -656,6 +675,7 @@ export class ESModulesTask extends BuildTask {
          return resource
       }
    }
+   
    async execute() {
       if (this.context) {
          const prev_ctx = this.context
@@ -666,7 +686,8 @@ export class ESModulesTask extends BuildTask {
       const { target } = this
       if (target.watch) {
          return new Promise<void>(async (resolve, reject) => {
-            this.context = await create_esbuild_context(this, target.devmode, resolve)
+            this.onFirstReady = resolve
+            this.context = await create_esbuild_context(this, target.devmode)
             await this.context.watch()
          })
       }

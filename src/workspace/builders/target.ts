@@ -1,10 +1,17 @@
-import { type ComponentID, type ComponentManifest } from "../workspace/component.ts"
-import { Bundle, Library } from "../workspace/workspace.ts"
-import type { Log } from "../workspace/helpers/logger.ts"
-import { ESModulesTask } from "./helpers/emit-esmodules.ts"
-import { type IStorageTransaction, type IStorageZone } from "../workspace/storage.ts"
-import { AssetsTask } from "./helpers/emit-static-assets.ts"
-import type { BuildTask } from "./helpers/task.ts"
+import { type ComponentID, type ComponentManifest } from "../../core/mod-node.ts"
+import { Bundle, Library } from "../workspace.ts"
+import type { Log } from "../../utils/logger.ts"
+import { ESModulesTask } from "../tasks/emit-esmodules.ts"
+import { type IStorageTransaction, type IStorageZone } from "../storage.ts"
+import { AssetsTask } from "../tasks/emit-static-assets.ts"
+import type { BuildTask } from "../tasks/task.ts"
+
+export type BuildTargetEvent = {
+   type: "ready"
+   target: BuildTarget
+}
+
+export type BuildTargetNotifyHandler = (event: BuildTargetEvent) => void | Promise<void>
 
 export class BuildTarget {
    components = new Map<ComponentID, ComponentManifest>()
@@ -14,6 +21,7 @@ export class BuildTarget {
    finalTasks: BuildTask[] = []
    transaction: IStorageTransaction = null
    readonly log: Log
+   private subscribers = new Set<BuildTargetNotifyHandler>()
    constructor(
       readonly name: string,
       readonly storage: IStorageZone,
@@ -64,6 +72,18 @@ export class BuildTarget {
 
       this.components.set(id, manifest)
       return true
+   }
+   async notify(event: BuildTargetEvent): Promise<void> {
+      for (const handler of this.subscribers) {
+         await handler(event)
+      }
+   }
+   on(handler: BuildTargetNotifyHandler): () => void {
+      this.subscribers.add(handler)
+      return () => this.subscribers.delete(handler)
+   }
+   off(handler: BuildTargetNotifyHandler): void {
+      this.subscribers.delete(handler)
    }
    private async chrona(task: BuildTask): Promise<void> {
       const name = task.constructor.name

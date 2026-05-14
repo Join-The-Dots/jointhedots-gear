@@ -2,8 +2,9 @@ import Path from "node:path"
 import Fs from "node:fs"
 import { type CommandModule } from "yargs"
 import { open_workspace } from "../workspace/workspace.ts"
-import { makeComponentPublication, type BundleManifest, type ComponentPublication } from "../workspace/component.ts"
-import { BundleSelector } from "../builder/build-app-base.ts"
+import { type BundleManifest, type ComponentPublication } from "../core/mod-node.ts"
+import { BundleSelector } from "../workspace/builders/build-app-base.ts"
+import { makeComponentPublication } from "../core/components/helpers.ts"
 
 export function command_install(): CommandModule<any, {
    ws?: string

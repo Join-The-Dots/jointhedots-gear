@@ -1,14 +1,14 @@
 import Path from "node:path"
 import ChildProcess from "node:child_process"
-import { Library } from "../workspace/workspace.ts"
-import { StorageFiles } from "../workspace/storage.ts"
-import { BuildTarget } from "./build-target.ts"
-import { TypescriptDefinitionTask } from "./helpers/emit-typescript-definition.ts"
-import { PackageManifestTask } from "./helpers/emit-package-manifest.ts"
-import { create_export_map } from "../workspace/helpers/create-manifests.ts"
-import { BundleManifestTask } from "./helpers/emit-bundle-manifest.ts"
-import { ComponentsDtsTask } from "./helpers/emit-components-dts.ts"
-import { ArtifactNpmTask } from "./helpers/emit-artifact.ts"
+import { Library } from "../workspace.ts"
+import { StorageFiles } from "../storage.ts"
+import { BuildTarget } from "./target.ts"
+import { TypescriptDefinitionTask } from "../tasks/emit-typescript-definition.ts"
+import { PackageManifestTask } from "../tasks/emit-package-manifest.ts"
+import { create_export_map } from "../helpers/create-manifests.ts"
+import { BundleManifestTask } from "../tasks/emit-bundle-manifest.ts"
+import { ComponentsDtsTask } from "../tasks/emit-components-dts.ts"
+import { ArtifactNpmTask } from "../tasks/emit-artifact.ts"
 
 export type BuildLibraryOptions = {
    library: Library
